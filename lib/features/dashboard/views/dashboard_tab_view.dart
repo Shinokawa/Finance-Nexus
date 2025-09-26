@@ -1517,13 +1517,17 @@ class _NetWorthMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
+    final secondary = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
+    final tertiary = CupertinoDynamicColor.resolve(CupertinoColors.tertiaryLabel, context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: QHTypography.footnote.copyWith(
-            color: CupertinoColors.secondaryLabel,
+            color: secondary,
           ),
         ),
         const SizedBox(height: 2),
@@ -1531,7 +1535,7 @@ class _NetWorthMetric extends StatelessWidget {
           value,
           style: QHTypography.subheadline.copyWith(
             fontWeight: FontWeight.w600,
-            color: color ?? CupertinoColors.label,
+            color: color ?? labelColor,
           ),
         ),
         if (subtitle != null) ...[
@@ -1539,7 +1543,7 @@ class _NetWorthMetric extends StatelessWidget {
           Text(
             subtitle!,
             style: QHTypography.footnote.copyWith(
-              color: CupertinoColors.tertiaryLabel,
+              color: tertiary.withValues(alpha: 0.8),
               fontSize: 11,
             ),
           ),

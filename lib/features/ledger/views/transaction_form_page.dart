@@ -5,6 +5,7 @@ import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
 import '../../../providers/repository_providers.dart';
 import '../../accounts/providers/account_summary_providers.dart';
+import 'category_selection_page.dart';
 
 class TransactionFormPage extends ConsumerStatefulWidget {
   const TransactionFormPage({
@@ -144,7 +145,7 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
     
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text(isEditing ? '编辑流水' : '记一笔'),
+        middle: Text(isEditing ? '编辑交易' : '添加交易'),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () => Navigator.of(context).pop(),
@@ -236,10 +237,33 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
                 return null;
               },
             ),
-            CupertinoTextFormFieldRow(
-              controller: _categoryController,
-              prefix: const Text('分类'),
-              placeholder: _getCategoryPlaceholder(),
+            // 类别选择
+            GestureDetector(
+              onTap: _showCategorySelector,
+              child: CupertinoFormRow(
+                prefix: const Text('类别'),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _categoryController.text.trim().isEmpty
+                            ? _getCategoryPlaceholder()
+                            : _categoryController.text.trim(),
+                        style: TextStyle(
+                          color: _categoryController.text.trim().isEmpty
+                              ? CupertinoColors.placeholderText
+                              : CupertinoColors.label,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      CupertinoIcons.right_chevron,
+                      color: CupertinoColors.systemGrey,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
             ),
             // 日期选择
             GestureDetector(
@@ -283,12 +307,12 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
 
         // 备注
         CupertinoFormSection.insetGrouped(
-          header: const Text('备注'),
+          header: const Text('详细信息'),
           children: [
             CupertinoTextFormFieldRow(
               controller: _notesController,
               prefix: const Text('备注'),
-              placeholder: '可选',
+              placeholder: '记录这笔交易的详细信息（可选）',
               maxLines: 3,
             ),
           ],
@@ -301,7 +325,7 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: CupertinoButton.filled(
             onPressed: _isSaving ? null : _handleSubmit,
-            child: Text(isEditing ? '保存修改' : '记录这笔'),
+            child: Text(isEditing ? '保存修改' : '添加交易'),
           ),
         ),
       ],
@@ -387,24 +411,76 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
   }
 
   void _showDatePicker() {
+    DateTime tempDate = _selectedDate;
     showCupertinoModalPopup<void>(
       context: context,
       builder: (context) => Container(
-        height: 200,
-        decoration: const BoxDecoration(
-          color: CupertinoColors.systemBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: CupertinoDatePicker(
-          mode: CupertinoDatePickerMode.date,
-          initialDateTime: _selectedDate,
-          maximumDate: DateTime.now(),
-          onDateTimeChanged: (date) {
-            setState(() => _selectedDate = date);
-          },
+        height: 300,
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: CupertinoColors.separator,
+                    width: 0.0,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      setState(() => _selectedDate = tempDate);
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('完成'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: tempDate,
+                maximumDate: DateTime.now().add(const Duration(days: 1)), // 允许选择今天和明天
+                minimumDate: DateTime.now().subtract(const Duration(days: 365 * 10)), // 最多10年前
+                onDateTimeChanged: (date) {
+                  tempDate = date;
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  void _showCategorySelector() async {
+    final selectedCategory = await Navigator.of(context).push<String>(
+      CupertinoPageRoute(
+        builder: (context) => CategorySelectionPage(
+          initialCategory: _categoryController.text.trim().isEmpty 
+              ? null 
+              : _categoryController.text.trim(),
+        ),
+      ),
+    );
+    
+    if (selectedCategory != null) {
+      setState(() {
+        _categoryController.text = selectedCategory;
+      });
+    }
   }
 
   String _getCategoryPlaceholder() {
@@ -447,6 +523,17 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    
+    if (dateOnly == today) {
+      return '今天';
+    } else if (dateOnly == yesterday) {
+      return '昨天';
+    } else {
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    }
   }
 }

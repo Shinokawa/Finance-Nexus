@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'design/design_system.dart';
@@ -8,7 +9,9 @@ import 'features/ledger/views/ledger_tab_view.dart';
 import 'features/ledger/views/transaction_form_page.dart';
 import 'features/analytics/views/analytics_tab_view.dart';
 import 'features/portfolios/views/holding_selection_page.dart';
+import 'features/settings/views/settings_tab_view.dart';
 // import 'providers/debug_seed_provider.dart'; // 已禁用开发调试数据
+import 'providers/app_settings_provider.dart';
 import 'providers/debug_seed_provider.dart';
 
 class QuantHubApp extends ConsumerWidget {
@@ -16,14 +19,18 @@ class QuantHubApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 注释掉开发调试用的数据重置，避免每次启动都清空用户数据
-    // 启用debug数据以使用基于2024.9.25真实价格的模拟持仓
-    ref.watch(debugSeedProvider);
+    // 仅在调试模式下注入演示数据，避免发布包污染真实用户数据
+    if (!kReleaseMode) {
+      ref.watch(debugSeedProvider);
+    }
+    final settings = ref.watch(appSettingsProvider);
+
     return CupertinoApp(
       title: 'Quant Hub',
       theme: QHTheme.theme(Brightness.light),
       builder: (context, child) {
-        final brightness = MediaQuery.platformBrightnessOf(context);
+        final platformBrightness = MediaQuery.platformBrightnessOf(context);
+        final brightness = settings.themeMode.resolveBrightness(platformBrightness);
         return CupertinoTheme(
           data: QHTheme.theme(brightness),
           child: child ?? const SizedBox.shrink(),
@@ -47,7 +54,22 @@ class _QuantHubTabScaffoldState extends ConsumerState<_QuantHubTabScaffold> {
     _Tab.accounts,
     _Tab.ledger,
     _Tab.analytics,
+    _Tab.settings,
   ];
+
+  late final CupertinoTabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = CupertinoTabController();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   void _showQuickAddMenu() {
     showCupertinoModalPopup<void>(
@@ -119,6 +141,7 @@ class _QuantHubTabScaffoldState extends ConsumerState<_QuantHubTabScaffold> {
     return Stack(
       children: [
         CupertinoTabScaffold(
+          controller: _tabController,
           tabBar: CupertinoTabBar(
             height: 58, // 减少高度，让整体更紧凑，更像原生
             iconSize: 20, // 进一步减小图标大小
@@ -138,39 +161,51 @@ class _QuantHubTabScaffoldState extends ConsumerState<_QuantHubTabScaffold> {
           },
         ),
         // 悬浮操作按钮
-        Positioned(
-          right: 20,
-          bottom: 94, // 调整位置：TabBar 高度58 + 一些间距36 = 94
-          child: GestureDetector(
-            onTap: _showQuickAddMenu,
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: theme.primaryColor,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
+        AnimatedBuilder(
+          animation: _tabController,
+          builder: (context, _) {
+            final currentTab = _tabs[_tabController.index];
+            if (currentTab == _Tab.settings) {
+              return const SizedBox.shrink();
+            }
+            return Positioned(
+              right: 20,
+              bottom: 94, // 调整位置：TabBar 高度58 + 一些间距36 = 94
+              child: GestureDetector(
+                onTap: _showQuickAddMenu,
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: CupertinoDynamicColor.resolve(
+                          CupertinoColors.black,
+                          context,
+                        ).withValues(alpha: 0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                ],
+                  child: const Icon(
+                    CupertinoIcons.add,
+                    color: CupertinoColors.white,
+                    size: 24,
+                  ),
+                ),
               ),
-              child: const Icon(
-                CupertinoIcons.add,
-                color: CupertinoColors.white,
-                size: 24,
-              ),
-            ),
-          ),
+            );
+          },
         ),
       ],
     );
   }
 }
 
-enum _Tab { dashboard, accounts, ledger, analytics }
+enum _Tab { dashboard, accounts, ledger, analytics, settings }
 
 extension on _Tab {
   BottomNavigationBarItem toBottomNavigationBarItem() {
@@ -195,6 +230,11 @@ extension on _Tab {
           icon: Icon(CupertinoIcons.chart_bar_square_fill),
           label: '分析',
         );
+      case _Tab.settings:
+        return const BottomNavigationBarItem(
+          icon: Icon(CupertinoIcons.gear_alt_fill),
+          label: '设置',
+        );
     }
   }
 
@@ -208,6 +248,8 @@ extension on _Tab {
         return const LedgerTabView();
       case _Tab.analytics:
         return const AnalyticsTabView();
+      case _Tab.settings:
+        return const SettingsTabView();
     }
   }
 }

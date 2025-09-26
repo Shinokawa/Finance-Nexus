@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quant_hub/core/enums.dart';
-import 'package:quant_hub/data/local/app_database.dart';
-import 'package:quant_hub/features/accounts/models/account_summary.dart';
+import 'package:finanexus/core/enums.dart';
+import 'package:finanexus/data/local/app_database.dart';
+import 'package:finanexus/features/accounts/models/account_summary.dart';
 
 void main() {
   group('AccountSummary', () {

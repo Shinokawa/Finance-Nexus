@@ -10,12 +10,17 @@ class QHColors {
 
   static const groupedBackground = CupertinoDynamicColor.withBrightness(
     color: Color(0xFFE5E5EA), // System Gray 5
-    darkColor: Color(0xFF1C1C1E),
+    darkColor: Color(0xFF2C2C2E),
   );
 
   static const cardBackground = CupertinoDynamicColor.withBrightness(
-    color: CupertinoColors.secondarySystemGroupedBackground,
-    darkColor: CupertinoColors.secondarySystemGroupedBackground,
+    color: CupertinoColors.white,
+    darkColor: Color(0xFF2C2C2E),
+  );
+
+  static const surface = CupertinoDynamicColor.withBrightness(
+    color: Color(0xFFF7F8FA),
+    darkColor: Color(0xFF1C1C1E),
   );
 
   static const primary = CupertinoColors.activeBlue;

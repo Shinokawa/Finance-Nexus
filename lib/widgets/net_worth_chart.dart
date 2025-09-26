@@ -154,7 +154,7 @@ class _NetWorthChartState extends State<NetWorthChart> {
               // 图表区域占据剩余空间，确保居中和自适应
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4), // 左右微调，让图表更居中
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: buildChartBody(),
                 ),
               ),
@@ -305,8 +305,8 @@ class _NetWorthChartPainter extends CustomPainter {
     final uniqueYValues = yAxisValues.toSet().toList()..sort();
     
     // 动态计算内边距，确保图表居中
-    const double topPadding = 8;
-    const double bottomPadding = 26;
+  const double topPadding = 12;
+  const double bottomPadding = 32;
     
     // 优化Y轴标签宽度计算，使用更紧凑的格式测试
     double maxLabelWidth = 0;
@@ -319,11 +319,11 @@ class _NetWorthChartPainter extends CustomPainter {
       maxLabelWidth = math.max(maxLabelWidth, tp.width);
     }
     
-    final leftPadding = maxLabelWidth + 12; // 基于最宽标签动态设置，增加一点缓冲
+  final leftPadding = maxLabelWidth + 20; // 基于最宽标签动态设置，增加一点缓冲
     // 为了让图表本身居中，计算理想的右侧padding
     // 但不要让它过度影响图表大小，设置一个合理的最大值
-    final idealRightPadding = leftPadding;
-    final rightPadding = math.min(idealRightPadding, 60.0); // 限制最大右侧padding
+  final idealRightPadding = leftPadding * 0.7;
+  final rightPadding = math.max(24.0, math.min(idealRightPadding, 56.0));
     
     final chartWidth = math.max(1.0, size.width - leftPadding - rightPadding);
     final chartHeight = math.max(1.0, size.height - topPadding - bottomPadding);

@@ -8,8 +8,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:quant_hub/app.dart';
-import 'package:quant_hub/features/accounts/providers/account_summary_providers.dart';
+import 'package:finanexus/app.dart';
+import 'package:finanexus/features/accounts/providers/account_summary_providers.dart';
 
 void main() {
   testWidgets('Displays account & portfolio tabs', (tester) async {

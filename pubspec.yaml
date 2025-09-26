@@ -1,5 +1,5 @@
-name: quant_hub
-description: "A new Flutter project."
+name: finanexus
+description: "FinaNexus - Your Financial Analysis Hub"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -43,6 +43,7 @@ dependencies:
   collection: ^1.18.0
   http: ^1.2.1
   crypto: ^3.0.5
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:

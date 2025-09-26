@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quant_hub/core/enums.dart';
+import 'package:finanexus/core/enums.dart';
 
 void main() {
   group('TransactionRepository Integration Tests', () {
