@@ -62,13 +62,13 @@
 
 #### iOS 用户
 
-- 📱 **推荐**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
-- 🛠️ **TestFlight**: 即将上线（敬请期待）
-- 🏪 **App Store**: 计划上架
+- **侧载**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
+- **TestFlight**: 即将上线（敬请期待）
+- **App Store**: 计划上架
 
 #### macOS 用户
 
-- 💻 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载 .dmg 文件
+- 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载 .dmg 文件
 
 #### 开发者
 
@@ -416,15 +416,13 @@
 - 支持akshare等数据源
 - 支持自定义数据提供商
 
-## 📱 支持平台
+## 支持平台
 
 - ✅ iOS (主要平台)
 - ✅ macOS
 - 🔄 Android (计划中)
-- 🔄 Windows (计划中)
-- 🔄 Linux (计划中)
 
-## 🏗️ 技术架构
+## 技术架构
 
 - **框架**: Flutter 3.x
 - **状态管理**: Riverpod
@@ -432,7 +430,7 @@
 - **图表**: 自定义图表组件
 - **设计**: Cupertino Design System
 
-## 🤝 贡献指南
+## 贡献指南
 
 欢迎贡献代码！请遵循以下步骤：
 
@@ -442,29 +440,27 @@
 4. 推送分支：`git push origin feature/amazing-feature`
 5. 创建 Pull Request
 
-## 📄 许可证
+## 许可证
 
 本项目采用 MIT License - 详见 [LICENSE](LICENSE) 文件
 
-## 🔒 隐私声明
+## 隐私声明
 
 - ✅ 所有数据存储在本地设备
 - ✅ 不会上传个人财务信息到云端
 - ✅ 行情数据来源可自定义配置
 - ✅ 完全离线使用（除行情数据外）
 
-## 📞 支持
+## 支持
 
 如果您遇到问题或有功能建议：
 
-- 🐛 [提交 Issue](https://github.com/Shinokawa/Finance-Nexus/issues)
-- 💬 [讨论区](https://github.com/Shinokawa/Finance-Nexus/discussions)
-- 📧 联系作者
+- [提交 Issue](https://github.com/Shinokawa/Finance-Nexus/issues)
+- 联系作者
 
-## 🌟 致谢
+## 致谢
 
 - 感谢 [akshare](https://github.com/akfamily/akshare) 提供免费的金融数据接口
 - 感谢 Flutter 团队提供优秀的跨平台框架
 - 感谢所有为这个项目做出贡献的开发者！
 
----
