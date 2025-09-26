@@ -1,4 +1,4 @@
-# Finance Nexus / quant_hub
+# Finance Nexus
 
 一个面向个人使用的“资产与投资记录”小工具
 
