@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design/design_system.dart';
 import '../../../providers/app_settings_provider.dart';
+import '../widgets/backend_config_section.dart';
 
 class SettingsTabView extends ConsumerWidget {
   const SettingsTabView({super.key});
@@ -181,6 +182,8 @@ class SettingsTabView extends ConsumerWidget {
             child: Column(
               children: [
                 const SizedBox(height: 20),
+                const BackendConfigSection(),
+                const SizedBox(height: 24),
                 _SettingsSection(
                   title: '外观',
                   children: [

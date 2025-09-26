@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _themeModeKey = 'app_theme_mode';
 const _autoRefreshKey = 'analytics_auto_refresh';
+const _backendUrlKey = 'backend_url';
+const _backendApiKeyKey = 'backend_api_key';
 
 enum AppThemeMode {
   system,
@@ -45,23 +47,33 @@ class AppSettings {
   const AppSettings({
     required this.themeMode,
     required this.analyticsAutoRefresh,
+    required this.backendUrl,
+    this.backendApiKey,
   });
 
   final AppThemeMode themeMode;
   final bool analyticsAutoRefresh;
+  final String backendUrl;
+  final String? backendApiKey;
 
   factory AppSettings.initial() => const AppSettings(
         themeMode: AppThemeMode.system,
         analyticsAutoRefresh: true,
+        backendUrl: '', // 不设置默认URL，让用户自己配置
+        backendApiKey: null,
       );
 
   AppSettings copyWith({
     AppThemeMode? themeMode,
     bool? analyticsAutoRefresh,
+    String? backendUrl,
+    String? backendApiKey,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
       analyticsAutoRefresh: analyticsAutoRefresh ?? this.analyticsAutoRefresh,
+      backendUrl: backendUrl ?? this.backendUrl,
+      backendApiKey: backendApiKey ?? this.backendApiKey,
     );
   }
 }
@@ -83,10 +95,14 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     if (prefs != null) {
       final storedTheme = prefs.getString(_themeModeKey);
       final storedAutoRefresh = prefs.getBool(_autoRefreshKey);
+      final storedBackendUrl = prefs.getString(_backendUrlKey);
+      final storedBackendApiKey = prefs.getString(_backendApiKeyKey);
 
       state = state.copyWith(
         themeMode: AppThemeModeLabel.fromName(storedTheme),
         analyticsAutoRefresh: storedAutoRefresh ?? state.analyticsAutoRefresh,
+        backendUrl: storedBackendUrl ?? state.backendUrl,
+        backendApiKey: storedBackendApiKey,
       );
     }
     _loading = false;
@@ -137,6 +153,40 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       await prefs.setBool(_autoRefreshKey, enabled);
     } catch (error) {
       debugPrint('[Settings] 保存自动刷新开关失败: $error');
+      _preferencesUnavailable = true;
+    }
+  }
+
+  Future<void> setBackendUrl(String url) async {
+    final trimmedUrl = url.trim();
+    state = state.copyWith(backendUrl: trimmedUrl);
+    final prefs = await _ensurePreferences();
+    if (prefs == null) {
+      return;
+    }
+    try {
+      await prefs.setString(_backendUrlKey, trimmedUrl);
+    } catch (error) {
+      debugPrint('[Settings] 保存后端URL失败: $error');
+      _preferencesUnavailable = true;
+    }
+  }
+
+  Future<void> setBackendApiKey(String? apiKey) async {
+    final trimmedApiKey = apiKey?.trim();
+    state = state.copyWith(backendApiKey: trimmedApiKey);
+    final prefs = await _ensurePreferences();
+    if (prefs == null) {
+      return;
+    }
+    try {
+      if (trimmedApiKey == null || trimmedApiKey.isEmpty) {
+        await prefs.remove(_backendApiKeyKey);
+      } else {
+        await prefs.setString(_backendApiKeyKey, trimmedApiKey);
+      }
+    } catch (error) {
+      debugPrint('[Settings] 保存API Key失败: $error');
       _preferencesUnavailable = true;
     }
   }

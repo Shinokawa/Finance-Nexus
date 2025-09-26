@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/historical_net_worth_providers.dart';
 import '../../../providers/repository_providers.dart';
+import '../../../providers/market_data_service_provider.dart';
 import '../../../providers/net_worth_range_state.dart';
 import '../../../services/analytics_service.dart';
 import '../../accounts/providers/account_summary_providers.dart';
@@ -14,6 +15,7 @@ final portfolioAnalyticsServiceProvider = Provider<PortfolioAnalyticsService>((r
     holdingRepository: ref.watch(holdingRepositoryProvider),
     portfolioRepository: ref.watch(portfolioRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
+    marketDataService: ref.watch(marketDataServiceProvider),
   );
 });
 

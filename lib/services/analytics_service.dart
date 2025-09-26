@@ -16,12 +16,14 @@ class PortfolioAnalyticsService {
     required this.holdingRepository,
     required this.portfolioRepository,
     required this.transactionRepository,
+    required this.marketDataService,
   });
 
   final NetWorthSeriesService netWorthSeriesService;
   final HoldingRepository holdingRepository;
   final PortfolioRepository portfolioRepository;
   final TransactionRepository transactionRepository;
+  final MarketDataService marketDataService;
 
   Future<PortfolioAnalyticsSnapshot> buildSnapshot({
     required NetWorthRange range,
@@ -458,7 +460,7 @@ class PortfolioAnalyticsService {
     final symbolReturnMap = <String, Map<DateTime, double>>{};
     for (final symbol in symbols) {
       try {
-        final history = await MarketDataService.getHistoricalData(
+        final history = await marketDataService.getHistoricalData(
           symbol: symbol,
           startDate: _formatDate(startDate),
           endDate: _formatDate(endDate),

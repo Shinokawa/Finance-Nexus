@@ -13,11 +13,13 @@ class NetWorthSeriesService {
     required this.holdingRepository,
     required this.accountRepository,
     required this.quoteRepository,
+    required this.marketDataService,
   });
 
   final HoldingRepository holdingRepository;
   final AccountRepository accountRepository;
   final QuoteRepository quoteRepository;
+  final MarketDataService marketDataService;
 
   Future<List<NetWorthDataPoint>> buildPortfolioSeries(
     String portfolioId,
@@ -199,7 +201,7 @@ class NetWorthSeriesService {
     final allDates = SplayTreeSet<DateTime>();
 
     for (final symbol in symbols) {
-      final data = await MarketDataService.getHistoricalData(
+      final data = await marketDataService.getHistoricalData(
         symbol: symbol,
         startDate: _formatDate(historyStart),
         endDate: _formatDate(historyEnd),

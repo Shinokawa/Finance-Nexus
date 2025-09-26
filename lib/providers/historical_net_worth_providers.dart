@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/net_worth_range_state.dart';
 import '../providers/repository_providers.dart';
+import '../providers/market_data_service_provider.dart';
 import '../services/net_worth_series_service.dart';
 import '../widgets/net_worth_chart.dart';
 
@@ -22,6 +23,7 @@ final netWorthSeriesServiceProvider = Provider<NetWorthSeriesService>((ref) {
     holdingRepository: ref.watch(holdingRepositoryProvider),
     accountRepository: ref.watch(accountRepositoryProvider),
     quoteRepository: ref.watch(quoteRepositoryProvider),
+    marketDataService: ref.watch(marketDataServiceProvider),
   );
 });
 

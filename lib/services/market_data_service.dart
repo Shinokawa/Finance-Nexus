@@ -136,15 +136,27 @@ class HistoricalData {
 
 /// 市场数据服务类
 class MarketDataService {
-  static const String _baseUrl = 'http://74.226.178.107:57777/api/history';
+  const MarketDataService({
+    required this.baseUrl,
+    this.apiKey,
+  });
+
+  final String baseUrl;
+  final String? apiKey;
+
   static const Duration _defaultHistoryWindow = Duration(days: 365);
 
   /// 获取历史行情数据（带智能增量更新）
-  static Future<List<HistoricalData>> getHistoricalData({
+  Future<List<HistoricalData>> getHistoricalData({
     required String symbol,
     String? startDate,
     String? endDate,
   }) async {
+    // 检查是否配置了后端URL
+    if (baseUrl.isEmpty) {
+      throw Exception('未配置后端服务器地址，请在设置中配置');
+    }
+
     final now = DateTime.now();
     final defaultEnd = _determineHistoricalEndDate(now);
     var normalizedEnd = endDate != null ? _parseRequestDate(endDate) : defaultEnd;
@@ -243,7 +255,7 @@ class MarketDataService {
   }
 
   /// 执行增量更新
-  static Future<List<HistoricalData>> _performIncrementalUpdate(
+  Future<List<HistoricalData>> _performIncrementalUpdate(
     String symbol,
     List<HistoricalData> cachedData,
     DateTime requestStart,
@@ -318,14 +330,14 @@ class MarketDataService {
   }
 
   /// 从API获取数据
-  static Future<List<HistoricalData>> _fetchFromApi(
+  Future<List<HistoricalData>> _fetchFromApi(
     String symbol,
     DateTime startDate,
     DateTime endDate,
   ) async {
     final formattedStart = _formatDateForApi(_normalizeDate(startDate));
     final formattedEnd = _formatDateForApi(_normalizeDate(endDate));
-    final uri = Uri.parse(_baseUrl).replace(queryParameters: {
+    final uri = Uri.parse(baseUrl).resolve('/api/history').replace(queryParameters: {
       'symbol': symbol,
       'start_date': formattedStart,
       'end_date': formattedEnd,
@@ -333,27 +345,46 @@ class MarketDataService {
 
     print('[INFO] 请求历史数据: $uri');
 
-    final response = await http.get(uri).timeout(
-      const Duration(seconds: 30),
-      onTimeout: () => throw Exception('请求超时'),
-    );
+    try {
+      final request = http.Request('GET', uri);
+      
+      // 如果配置了API Key，添加到请求头
+      if (apiKey != null && apiKey!.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $apiKey';
+        // 或者根据你的后端实现，可能需要使用其他格式：
+        // request.headers['X-API-Key'] = apiKey!;
+      }
 
-    if (response.statusCode != 200) {
-      throw Exception('API请求失败: ${response.statusCode}');
+      final client = http.Client();
+      try {
+        final streamedResponse = await client.send(request).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw Exception('请求超时'),
+        );
+        final response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode != 200) {
+          throw Exception('API请求失败: ${response.statusCode}');
+        }
+
+        final jsonData = json.decode(response.body) as Map<String, dynamic>;
+
+        if (jsonData['status'] != 'success') {
+          throw Exception('API返回错误: ${jsonData['message']}');
+        }
+
+        final dataList = (jsonData['data'] as List<dynamic>)
+            .map((item) => HistoricalData.fromJson(item as Map<String, dynamic>))
+            .toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
+
+        return dataList;
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      rethrow;
     }
-
-    final jsonData = json.decode(response.body) as Map<String, dynamic>;
-
-    if (jsonData['status'] != 'success') {
-      throw Exception('API返回错误: ${jsonData['message']}');
-    }
-
-    final dataList = (jsonData['data'] as List<dynamic>)
-        .map((item) => HistoricalData.fromJson(item as Map<String, dynamic>))
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    return dataList;
   }
 
   /// 生成缓存文件名（每个股票一个文件）
