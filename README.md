@@ -1,16 +1,18 @@
-# quant_hub
+# Finance Nexus / quant_hub
 
-A new Flutter project.
+一个面向个人使用的“资产与投资记录”小工具
 
-## Getting Started
+## 这是做什么的
 
-This project is a starting point for a Flutter application.
+把分散在不同地方的：
 
-A few resources to get you started if this is your first Flutter project:
+- 账户（现金 / 投资 / 负债）
+- 投资组合（一个自定义的分类视角）
+- 持仓（股票 / ETF）
+- 资金与交易记录
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+集中到一个本地应用里，方便自己看：现在有多少、结构怎样、最近盈亏如何。
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 为什么做
+
+市面上的记账偏日常消费；券商 App 又只看到单账户。自己想要一个更贴近“资产全貌 + 自己的分类方式”的视图，同时数据留在本地，不上传。
