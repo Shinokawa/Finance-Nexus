@@ -2,7 +2,7 @@
 
 一个面向个人使用的"资产与投资记录"管理与可视化工具
 
-## 📋 这是做什么的
+## 这是做什么的
 
 把分散在不同地方的：
 
@@ -13,44 +13,44 @@
 
 集中到一个本地应用里，方便自己看：现在有多少、结构怎样、最近盈亏如何。
 
-## 💡 为什么做
+## 为什么做
 
 市面上的记账偏日常消费；券商 App 又只看到单账户。自己想要一个更贴近"资产全貌 + 自己的分类方式"的视图，同时数据留在本地，不上传。
 
-## ✨ 主要功能
+## 主要功能
 
-### 📊 仪表板
+### 仪表板
 
 - 总资产概览与净值变化
 - 账户余额和持仓汇总
 - 收益率统计和趋势图表
 
-### 💰 账户管理
+### 账户管理
 
 - 多账户支持（银行卡、券商账户、现金等）
 - 账户分类和余额跟踪
 - 账户间资金转移记录
 
-### 📈 投资组合
+### 投资组合
 
 - 自定义投资组合分类
 - 持仓管理和成本跟踪
 - 实时行情数据（需配置后端）
 
-### 📝 交易记录
+### 交易记录
 
 - 完整的交易历史记录
 - 买入卖出、分红、转账等操作
 - 交易成本和收益计算
 
-### 📊 分析工具
+### 分析工具
 
 - 资产配置分析
 - 收益率分析和风险评估
 - 历史净值曲线图
 - 投资组合相关性分析
 
-### ⚙️ 后端配置
+### 后端配置
 
 - 可配置的后端服务器地址
 - API 密钥管理
@@ -63,19 +63,19 @@
 - 可选API密钥认证
 - 实时行情数据获取
 
-## 🚀 快速开始
+## 快速开始
 
 ### 下载安装
 
 #### iOS 用户
 
-- 📱 **推荐**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
-- 🛠️ **TestFlight**: 即将上线（敬请期待）
-- 🏪 **App Store**: 计划上架
+- **侧载**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
+- **TestFlight**: 即将上线（敬请期待）
+- **App Store**: 计划上架
 
 #### macOS 用户
 
-- 💻 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载 .app 文件
+- 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载 .dmg 文件
 
 #### 开发者
 
@@ -131,7 +131,7 @@
    - 添加交易记录
    - 查看资产分析
 
-## 🛠️ 后端配置
+## 后端配置
 
 应用支持连接自定义后端服务来获取实时行情数据。你可以部署自己的后端服务，完全控制数据源。
 
@@ -423,15 +423,13 @@
 - 支持akshare等数据源
 - 支持自定义数据提供商
 
-## 📱 支持平台
+## 支持平台
 
 - ✅ iOS (主要平台)
 - ✅ macOS
 - 🔄 Android (计划中)
-- 🔄 Windows (计划中)
-- 🔄 Linux (计划中)
 
-## 🏗️ 技术架构
+## 技术架构
 
 - **框架**: Flutter 3.x
 - **状态管理**: Riverpod
@@ -439,7 +437,7 @@
 - **图表**: 自定义图表组件
 - **设计**: Cupertino Design System
 
-## 🤝 贡献指南
+## 贡献指南
 
 欢迎贡献代码！请遵循以下步骤：
 
@@ -449,55 +447,27 @@
 4. 推送分支：`git push origin feature/amazing-feature`
 5. 创建 Pull Request
 
-## 📄 许可证
+## 许可证
 
 本项目采用 MIT License - 详见 [LICENSE](LICENSE) 文件
 
-## 🔒 隐私声明
+## 隐私声明
 
 - ✅ 所有数据存储在本地设备
 - ✅ 不会上传个人财务信息到云端
 - ✅ 行情数据来源可自定义配置
 - ✅ 完全离线使用（除行情数据外）
 
-## � macOS 打包与分发
-
-项目提供了完整的 macOS DMG 打包脚本，支持代码签名和公证：
-
-### 基础打包
-```bash
-# 一键构建和打包
-./scripts/build_and_package.sh
-```
-
-### 专业分发（包含签名）
-1. 配置开发者信息：
-```bash
-cp scripts/.env.example scripts/.env
-# 编辑填写开发者证书信息
-```
-
-2. 执行完整打包：
-```bash
-./scripts/build_and_package.sh
-```
-
-详细说明请查看：
-- [macOS 打包使用指南](scripts/README.md)
-- [完整打包文档](docs/macos_packaging.md)
-
-## �📞 支持
+## 支持
 
 如果您遇到问题或有功能建议：
 
-- 🐛 [提交 Issue](https://github.com/Shinokawa/Finance-Nexus/issues)
-- 💬 [讨论区](https://github.com/Shinokawa/Finance-Nexus/discussions)
-- 📧 联系作者
+- [提交 Issue](https://github.com/Shinokawa/Finance-Nexus/issues)
+- 联系作者
 
-## 🌟 致谢
+## 致谢
 
 - 感谢 [akshare](https://github.com/akfamily/akshare) 提供免费的金融数据接口
 - 感谢 Flutter 团队提供优秀的跨平台框架
 - 感谢所有为这个项目做出贡献的开发者！
 
----
