@@ -6,6 +6,7 @@ import '../../../data/local/app_database.dart';
 import '../../../design/design_system.dart';
 import '../../../providers/repository_providers.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
+import '../../dashboard/models/holding_position.dart';
 import '../../ledger/views/transaction_form_page.dart';
 import '../../portfolios/providers/portfolio_detail_providers.dart';
 import '../../portfolios/views/holding_form_page.dart';
@@ -140,12 +141,20 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
 
   Widget _buildHoldingsList() {
     final holdingsAsync = ref.watch(accountHoldingsProvider(widget.accountSummary.account.id));
+    final dashboardAsync = ref.watch(dashboardDataProvider);
 
     return holdingsAsync.when(
       data: (holdings) {
         if (holdings.isEmpty) {
           return const _EmptyHoldingsView();
         }
+
+        final accountId = widget.accountSummary.account.id;
+        final snapshot = dashboardAsync.valueOrNull?.accountSnapshots[accountId];
+        final positionsByHoldingId = {
+          for (final position in snapshot?.positions ?? const <HoldingPosition>[])
+            position.holding.id: position,
+        };
         
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -163,6 +172,7 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
               padding: const EdgeInsets.only(bottom: 12),
               child: _HoldingCard(
                 holding: holding,
+                position: positionsByHoldingId[holding.id],
                 onTrade: () => _showTradeForm(holding),
                 onEdit: () => _showEditHolding(holding),
                 onDelete: () => _showDeleteHolding(holding),
@@ -177,9 +187,59 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
   }
 
   Widget _buildTransactionHistory() {
-    // TODO: 实现交易历史列表
-    return const Center(
-      child: Text('交易历史功能开发中...'),
+    final accountId = widget.accountSummary.account.id;
+    final transactionsAsync = ref.watch(accountTransactionsProvider(accountId));
+
+    return transactionsAsync.when(
+      data: (transactions) {
+        if (transactions.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    CupertinoIcons.list_bullet,
+                    size: 48,
+                    color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '暂无交易记录',
+                    style: QHTypography.subheadline.copyWith(
+                      color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          itemCount: transactions.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) => _TransactionItem(
+            transaction: transactions[index],
+            currentAccountId: accountId,
+          ),
+        );
+      },
+      loading: () => const Center(child: CupertinoActivityIndicator()),
+      error: (error, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            '加载交易记录失败\n${error.toString()}',
+            textAlign: TextAlign.center,
+            style: QHTypography.subheadline.copyWith(
+              color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -628,11 +688,21 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
   }
 
   void _showTransactionHistory() {
-    setState(() {
-      if (widget.accountSummary.account.type == AccountType.investment) {
+    final account = widget.accountSummary.account;
+    if (account.type == AccountType.investment) {
+      setState(() {
         _selectedTab = 2;
-      }
-    });
+      });
+    } else {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (context) => AccountTransactionsPage(
+            accountId: account.id,
+            accountName: account.name,
+          ),
+        ),
+      );
+    }
   }
 
   void _showDeposit() {
@@ -752,6 +822,81 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
   }
 }
 
+class AccountTransactionsPage extends ConsumerWidget {
+  const AccountTransactionsPage({
+    super.key,
+    required this.accountId,
+    required this.accountName,
+  });
+
+  final String accountId;
+  final String accountName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final transactionsAsync = ref.watch(accountTransactionsProvider(accountId));
+
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text('$accountName 的交易记录'),
+      ),
+      child: SafeArea(
+        child: transactionsAsync.when(
+          data: (transactions) {
+            if (transactions.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.list_bullet,
+                        size: 56,
+                        color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '还没有交易记录',
+                        style: QHTypography.subheadline.copyWith(
+                          color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: transactions.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) => _TransactionItem(
+                transaction: transactions[index],
+                currentAccountId: accountId,
+              ),
+            );
+          },
+          loading: () => const Center(child: CupertinoActivityIndicator()),
+          error: (error, stack) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '加载交易记录失败\n${error.toString()}',
+                textAlign: TextAlign.center,
+                style: QHTypography.subheadline.copyWith(
+                  color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _QuickAction {
   final String title;
   final IconData icon;
@@ -806,9 +951,11 @@ class _HoldingCard extends StatelessWidget {
     required this.onTrade,
     required this.onEdit,
     required this.onDelete,
+    this.position,
   });
 
   final Holding holding;
+  final HoldingPosition? position;
   final VoidCallback onTrade;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -819,12 +966,15 @@ class _HoldingCard extends StatelessWidget {
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
     final secondaryColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
 
-    // TODO: 从API获取实时行情数据
-    final currentPrice = 10.50; // 模拟数据
-    final marketValue = holding.quantity * currentPrice;
-    final costBasis = holding.quantity * holding.averageCost;
-    final unrealizedProfit = marketValue - costBasis;
-    final profitRate = (unrealizedProfit / costBasis) * 100;
+    final latestPrice = position?.latestPrice;
+    final currentPrice = latestPrice ?? holding.averageCost;
+    final costBasis = position?.costBasis ?? holding.quantity * holding.averageCost;
+    final marketValue = position?.marketValue ?? holding.quantity * currentPrice;
+    final unrealizedProfit = position?.unrealizedProfit ?? (marketValue - costBasis);
+    final profitRate = costBasis > 0 ? (unrealizedProfit / costBasis) * 100 : null;
+    final profitRateText = profitRate != null ? '${profitRate.toStringAsFixed(2)}%' : '--';
+    final priceText = currentPrice > 0 ? '¥${currentPrice.toStringAsFixed(2)}' : '--';
+    final titleText = position?.displayName ?? holding.symbol;
 
     return GestureDetector(
       onTap: () => _showHoldingOptions(context),
@@ -848,12 +998,25 @@ class _HoldingCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    holding.symbol,
-                    style: QHTypography.subheadline.copyWith(
-                      color: labelColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        titleText,
+                        style: QHTypography.subheadline.copyWith(
+                          color: labelColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (titleText.toUpperCase() != holding.symbol.toUpperCase())
+                        Text(
+                          holding.symbol.toUpperCase(),
+                          style: QHTypography.footnote.copyWith(
+                            color: secondaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Column(
@@ -898,14 +1061,14 @@ class _HoldingCard extends StatelessWidget {
                 Expanded(
                   child: _buildHoldingMetric(
                     '现价',
-                    '¥${currentPrice.toStringAsFixed(2)}',
+                    priceText,
                     secondaryColor,
                   ),
                 ),
                 Expanded(
                   child: _buildHoldingMetric(
                     '盈亏率',
-                    '${profitRate.toStringAsFixed(2)}%',
+                    profitRateText,
                     _resolveChangeColor(unrealizedProfit),
                   ),
                 ),

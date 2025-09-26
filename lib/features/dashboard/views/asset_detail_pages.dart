@@ -117,6 +117,7 @@ class _PortfolioContent extends StatelessWidget {
             _PerformancePreview(
               kind: _PerformancePreviewKind.portfolio,
               targetId: snapshot.portfolio.id,
+              baselineValue: snapshot.costBasis > 0 ? snapshot.costBasis : null,
             ),
             const SizedBox(height: 24),
             _PieChartSection(
@@ -176,25 +177,27 @@ class _AccountContent extends StatelessWidget {
               label: '创建时间',
               value: account.createdAt.toLocal().toString(),
             ),
-            const SizedBox(height: 24),
-            _PerformancePreview(
-              kind: account.type == AccountType.investment
-                  ? _PerformancePreviewKind.account
-                  : _PerformancePreviewKind.total,
-              targetId: account.id,
-            ),
-            const SizedBox(height: 24),
-            if (account.type == AccountType.investment)
+            if (account.type == AccountType.investment) ...[
+              const SizedBox(height: 24),
+              _PerformancePreview(
+                kind: _PerformancePreviewKind.account,
+                targetId: account.id,
+                baselineValue: snapshot.costBasis > 0 ? snapshot.costBasis : null,
+              ),
+              const SizedBox(height: 24),
               _HoldingBreakdownList(
                 title: '账户持仓',
                 emptyMessage: '该账户暂无持仓。',
                 positions: positions,
                 totalMarketValue: snapshot.marketValue,
-              )
-            else if (account.type == AccountType.cash)
-              const _InfoHint(text: '这是一个现金账户，可以在交易或记账时作为资金来源或去向。')
-            else
+              ),
+            ] else if (account.type == AccountType.cash) ...[
+              const SizedBox(height: 24),
+              const _InfoHint(text: '这是一个现金账户，可以在交易或记账时作为资金来源或去向。'),
+            ] else ...[
+              const SizedBox(height: 24),
               const _InfoHint(text: '这是一个负债账户，后续将支持还款计划和利息跟踪。'),
+            ],
           ],
         ),
       ),
@@ -229,6 +232,7 @@ class _HoldingContent extends StatelessWidget {
             _PerformancePreview(
               kind: _PerformancePreviewKind.holding,
               targetId: position.holding.id,
+              baselineValue: position.costBasis > 0 ? position.costBasis : null,
             ),
             const SizedBox(height: 24),
             
@@ -565,7 +569,7 @@ class _HoldingOverviewCard extends StatelessWidget {
                 _MiniMetric(label: '总成本', value: _formatCurrency(position.costBasis)),
                 _MiniMetric(
                   label: '累计盈亏',
-                  value: _formatChange(position.unrealizedProfit, position.unrealizedPercent),
+                  value: _formatSignedCurrency(position.unrealizedProfit), // 只显示金额，不显示百分比
                   valueColor: _resolveChangeColor(position.unrealizedProfit),
                 ),
                 _MiniMetric(
@@ -575,7 +579,7 @@ class _HoldingOverviewCard extends StatelessWidget {
                 ),
                 _MiniMetric(
                   label: '今日盈亏',
-                  value: _formatChange(position.todayProfit, position.changePercent),
+                  value: _formatSignedCurrency(position.todayProfit), // 只显示金额，不显示百分比
                   valueColor: _resolveChangeColor(position.todayProfit),
                 ),
                 _MiniMetric(
@@ -598,10 +602,12 @@ class _PerformancePreview extends ConsumerWidget {
   const _PerformancePreview({
     required this.kind,
     this.targetId,
+    this.baselineValue,
   });
 
   final _PerformancePreviewKind kind;
   final String? targetId;
+  final double? baselineValue;
 
   AsyncValue<List<NetWorthDataPoint>> _watchSeries(WidgetRef ref, String rangeKey) {
     switch (kind) {
@@ -654,46 +660,48 @@ class _PerformancePreview extends ConsumerWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 160,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: CupertinoDynamicColor.resolve(
-                  CupertinoColors.systemBackground,
-                  context,
-                ).withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: dataAsync.when(
-                  data: (data) => NetWorthChart(
-                    netWorthHistory: data,
-                    height: 150,
-                    showTimeSelector: true,
+        child: SizedBox(
+          height: 220, // 增加一点高度以容纳内容
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded( // 使用Expanded让容器自适应剩余空间
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: CupertinoDynamicColor.resolve(
+                      CupertinoColors.systemBackground,
+                      context,
+                    ).withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  loading: () => Container(
-                    height: 150,
-                    alignment: Alignment.center,
-                    child: const CupertinoActivityIndicator(),
-                  ),
-                  error: (error, stack) => Container(
-                    height: 150,
-                    alignment: Alignment.center,
-                    child: Text(
-                      '加载失败',
-                      style: QHTypography.footnote.copyWith(
-                        color: CupertinoColors.secondaryLabel,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: dataAsync.when(
+                      data: (data) => NetWorthChart(
+                        netWorthHistory: data,
+                        showTimeSelector: true,
+                        baselineValue: baselineValue,
+                      ),
+                      loading: () => Container(
+                        alignment: Alignment.center,
+                        child: const CupertinoActivityIndicator(),
+                      ),
+                      error: (error, stack) => Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          '加载失败',
+                          style: QHTypography.footnote.copyWith(
+                            color: CupertinoColors.secondaryLabel,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1170,10 +1178,10 @@ Color _resolveChangeColor(double? value) {
     return CupertinoColors.secondaryLabel;
   }
   if (value > 0) {
-    return QHColors.profit;
+    return QHColors.profit; // 红色代表盈利/上涨
   }
   if (value < 0) {
-    return QHColors.loss;
+    return QHColors.loss; // 绿色代表亏损/下跌
   }
   return CupertinoColors.secondaryLabel;
 }
@@ -1335,8 +1343,8 @@ class _CompactInfoTile extends StatelessWidget {
     Color valueColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
     if (isProfit != null) {
       valueColor = isProfit! 
-        ? CupertinoDynamicColor.resolve(CupertinoColors.systemGreen, context)
-        : CupertinoDynamicColor.resolve(CupertinoColors.systemRed, context);
+        ? CupertinoDynamicColor.resolve(QHColors.profit, context)  // 盈利用红色（中国习惯）
+        : CupertinoDynamicColor.resolve(QHColors.loss, context);   // 亏损用绿色（中国习惯）
     }
 
     return Column(

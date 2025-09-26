@@ -32,7 +32,22 @@ class HoldingPosition {
   }
 
   double? get latestPrice => quote?.lastPrice;
-  double? get changePercent => quote?.changePercent;
+  double? get changePercent {
+    final direct = quote?.changePercent;
+    if (direct != null) {
+      return direct;
+    }
+    final change = quote?.change;
+    final last = quote?.lastPrice;
+    if (change == null || last == null) {
+      return null;
+    }
+    final previousClose = last - change;
+    if (previousClose == 0) {
+      return null;
+    }
+    return (change / previousClose) * 100;
+  }
   double? get change => quote?.change;
 
   double get costBasis => averageCost * quantity;

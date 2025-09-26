@@ -120,8 +120,8 @@ class _QuantHubTabScaffoldState extends ConsumerState<_QuantHubTabScaffold> {
       children: [
         CupertinoTabScaffold(
           tabBar: CupertinoTabBar(
-            height: 64,
-            iconSize: 26,
+            height: 58, // 减少高度，让整体更紧凑，更像原生
+            iconSize: 20, // 进一步减小图标大小
             activeColor: theme.primaryColor,
             inactiveColor: resolvedInactive,
             backgroundColor: resolvedBackground,
@@ -140,7 +140,7 @@ class _QuantHubTabScaffoldState extends ConsumerState<_QuantHubTabScaffold> {
         // 悬浮操作按钮
         Positioned(
           right: 20,
-          bottom: 100, // TabBar 高度 + 一些间距
+          bottom: 94, // 调整位置：TabBar 高度58 + 一些间距36 = 94
           child: GestureDetector(
             onTap: _showQuickAddMenu,
             child: Container(

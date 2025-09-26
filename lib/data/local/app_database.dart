@@ -249,4 +249,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteTransaction(String id) {
     return (delete(transactions)..where((tbl) => tbl.id.equals(id))).go();
   }
+
+  Future<int> deleteAllTransactions() {
+    return delete(transactions).go();
+  }
 }

@@ -55,6 +55,7 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
     if (widget.holding != null) {
       _selectedAccountId = widget.holding!.accountId;
       _selectedPortfolioId = widget.holding!.portfolioId;
+      _loadPurchaseDate(); // 加载实际的购买日期
     } else {
       if (widget.preselectedAccountId != null) {
         _selectedAccountId = widget.preselectedAccountId;
@@ -112,6 +113,28 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
       if (mounted) {
         _showErrorDialog('加载投资组合列表失败: $e');
       }
+    }
+  }
+
+  Future<void> _loadPurchaseDate() async {
+    if (widget.holding == null) return;
+    
+    try {
+      final transactions = await ref.read(transactionRepositoryProvider).getTransactionsByHolding(widget.holding!.id);
+      if (transactions.isNotEmpty) {
+        // 找到最早的买入交易日期
+        final buyTransactions = transactions
+            .where((t) => t.type == TransactionType.buy)
+            .toList();
+        if (buyTransactions.isNotEmpty) {
+          buyTransactions.sort((a, b) => a.date.compareTo(b.date));
+          setState(() {
+            _purchaseDate = buyTransactions.first.date;
+          });
+        }
+      }
+    } catch (e) {
+      // Handle error - keep default date
     }
   }
 
@@ -214,7 +237,7 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
           controller: controller,
           placeholder: placeholder,
           keyboardType: keyboardType,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: CupertinoDynamicColor.resolve(CupertinoColors.tertiarySystemBackground, context),
             borderRadius: BorderRadius.circular(10),
@@ -246,7 +269,7 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
           onTap: _portfolios.isNotEmpty ? _showPortfolioPicker : _showCreatePortfolioDialog,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: CupertinoDynamicColor.resolve(CupertinoColors.tertiarySystemBackground, context),
               borderRadius: BorderRadius.circular(10),
@@ -302,7 +325,7 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
           onTap: _investmentAccounts.isNotEmpty ? _showAccountPicker : _showCreateAccountDialog,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: CupertinoDynamicColor.resolve(CupertinoColors.tertiarySystemBackground, context),
               borderRadius: BorderRadius.circular(10),
@@ -355,7 +378,7 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
           onTap: _showDatePicker,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: CupertinoDynamicColor.resolve(CupertinoColors.tertiarySystemBackground, context),
               borderRadius: BorderRadius.circular(10),

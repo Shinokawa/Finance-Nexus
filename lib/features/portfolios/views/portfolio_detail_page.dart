@@ -50,6 +50,13 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
   }
 
   Widget _buildPortfolioContent(AsyncValue<DashboardData> dashboardAsync, List<Holding> holdings) {
+    final positionsByHoldingId = {
+      for (final position in dashboardAsync.valueOrNull
+              ?.portfolioSnapshots[widget.portfolio.id]
+              ?.positions ?? const <HoldingPosition>[])
+        position.holding.id: position,
+    };
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -73,7 +80,7 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
               padding: const EdgeInsets.only(bottom: 12),
               child: _HoldingCard(
                 holding: holding,
-                dashboardAsync: dashboardAsync,
+                position: positionsByHoldingId[holding.id],
                 onTrade: () => _showTradeForm(holding),
                 onEdit: () => _showEditHolding(holding),
                 onDelete: () => _showDeleteHolding(holding),
@@ -315,87 +322,46 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
         
         // 净值曲线
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    CupertinoIcons.graph_square,
-                    size: 20,
-                    color: CupertinoColors.systemGreen,
+          child: SizedBox(
+            height: 240,
+            child: Consumer(
+              builder: (context, ref, child) {
+                final dataAsync = ref.watch(
+                  portfolioHistoricalNetWorthProvider((
+                    portfolioId: widget.portfolio.id,
+                    timeRange: '1Y',
+                  )),
+                );
+                final snapshot = dashboardAsync.valueOrNull?.portfolioSnapshots[widget.portfolio.id];
+                final baseline = snapshot?.costBasis;
+                return dataAsync.when(
+                  data: (data) => NetWorthChart(
+                    netWorthHistory: data,
+                    showTimeSelector: true,
+                    baselineValue: baseline != null && baseline > 0 ? baseline : null,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '净值曲线',
-                    style: QHTypography.subheadline.copyWith(
-                      color: labelColor,
-                      fontWeight: FontWeight.w600,
+                  loading: () => const Center(
+                    child: CupertinoActivityIndicator(),
+                  ),
+                  error: (error, stackTrace) => Center(
+                    child: Text(
+                      '加载失败',
+                      style: QHTypography.footnote.copyWith(
+                        color: CupertinoDynamicColor.resolve(
+                          CupertinoColors.secondaryLabel,
+                          context,
+                        ),
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    '后端开发中',
-                    style: QHTypography.footnote.copyWith(
-                      color: CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // 净值曲线图表
-              Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: CupertinoDynamicColor.resolve(
-                    CupertinoColors.systemBackground,
-                    context,
-                  ).withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final dataAsync = ref.watch(
-                        portfolioHistoricalNetWorthProvider((
-                          portfolioId: widget.portfolio.id,
-                          timeRange: '1Y',
-                        )),
-                      );
-                      return dataAsync.when(
-                        data: (data) => NetWorthChart(
-                          netWorthHistory: data,
-                          height: 120,
-                          showTimeSelector: true,
-                        ),
-                        loading: () => const Center(
-                          child: CupertinoActivityIndicator(),
-                        ),
-                        error: (error, stackTrace) => Center(
-                          child: Text(
-                            '加载失败',
-                            style: QHTypography.footnote.copyWith(
-                              color: CupertinoDynamicColor.resolve(
-                                CupertinoColors.secondaryLabel,
-                                context,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -642,33 +608,36 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
   }
 }
 
-class _HoldingCard extends ConsumerWidget {
+class _HoldingCard extends StatelessWidget {
   const _HoldingCard({
     required this.holding,
-    required this.dashboardAsync,
     required this.onTrade,
     required this.onEdit,
     required this.onDelete,
+    this.position,
   });
 
   final Holding holding;
-  final AsyncValue<DashboardData> dashboardAsync;
+  final HoldingPosition? position;
   final VoidCallback onTrade;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final cardColor = CupertinoDynamicColor.resolve(QHColors.cardBackground, context);
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
     final secondaryColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
 
-    // TODO: 从API获取实时行情数据
-    final currentPrice = 10.50; // 模拟数据
-    final marketValue = holding.quantity * currentPrice;
-    final costBasis = holding.quantity * holding.averageCost;
-    final unrealizedProfit = marketValue - costBasis;
-    final profitRate = (unrealizedProfit / costBasis) * 100;
+    final latestPrice = position?.latestPrice;
+    final currentPrice = latestPrice ?? holding.averageCost;
+    final costBasis = position?.costBasis ?? holding.quantity * holding.averageCost;
+    final marketValue = position?.marketValue ?? holding.quantity * currentPrice;
+    final unrealizedProfit = position?.unrealizedProfit ?? (marketValue - costBasis);
+    final profitRate = costBasis > 0 ? (unrealizedProfit / costBasis) * 100 : null;
+    final profitRateText = profitRate != null ? '${profitRate.toStringAsFixed(2)}%' : '--';
+    final priceText = currentPrice > 0 ? '¥${currentPrice.toStringAsFixed(2)}' : '--';
+    final titleText = position?.displayName ?? holding.symbol;
 
     return GestureDetector(
       onTap: () => _showHoldingOptions(context),
@@ -692,12 +661,25 @@ class _HoldingCard extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    holding.symbol,
-                    style: QHTypography.subheadline.copyWith(
-                      color: labelColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        titleText,
+                        style: QHTypography.subheadline.copyWith(
+                          color: labelColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (titleText.toUpperCase() != holding.symbol.toUpperCase())
+                        Text(
+                          holding.symbol.toUpperCase(),
+                          style: QHTypography.footnote.copyWith(
+                            color: secondaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Column(
@@ -742,14 +724,14 @@ class _HoldingCard extends ConsumerWidget {
                 Expanded(
                   child: _buildHoldingMetric(
                     '现价',
-                    '¥${currentPrice.toStringAsFixed(2)}',
+                    priceText,
                     secondaryColor,
                   ),
                 ),
                 Expanded(
                   child: _buildHoldingMetric(
                     '盈亏率',
-                    '${profitRate.toStringAsFixed(2)}%',
+                    profitRateText,
                     _resolveChangeColor(unrealizedProfit),
                   ),
                 ),
