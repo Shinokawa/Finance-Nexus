@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
 import '../../../design/design_system.dart';
-import '../../../widgets/net_worth_chart.dart';
 import '../../accounts/providers/account_summary_providers.dart';
 import '../models/holding_position.dart';
 import '../providers/dashboard_providers.dart';
@@ -280,9 +279,6 @@ class _TotalNetWorthCard extends ConsumerWidget {
         .where((snapshot) => snapshot.account.type == AccountType.liability)
         .fold<double>(0, (sum, snapshot) => sum + snapshot.totalValue);
 
-    // 获取净值历史数据
-    final netWorthHistory = ref.watch(mockNetWorthHistoryProvider);
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -348,25 +344,6 @@ class _TotalNetWorthCard extends ConsumerWidget {
                 ],
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-          // 净值曲线图表
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              height: 100,
-              color: CupertinoDynamicColor.resolve(
-                CupertinoColors.systemBackground,
-                context,
-              ).withValues(alpha: 0.5),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: NetWorthChart(
-                  netWorthHistory: netWorthHistory,
-                  height: 76,
-                ),
-              ),
-            ),
           ),
           const SizedBox(height: 20),
           Wrap(

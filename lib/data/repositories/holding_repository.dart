@@ -14,6 +14,9 @@ class HoldingRepository {
   Future<List<Holding>> getHoldingsByAccount(String accountId) =>
       _holdingDao.getHoldingsByAccount(accountId);
 
+  Future<Holding?> getHoldingById(String id) =>
+    _holdingDao.getHoldingById(id);
+
   Future<List<Holding>> getHoldingsByPortfolio(String portfolioId) =>
       _holdingDao.getHoldingsByPortfolio(portfolioId);
 

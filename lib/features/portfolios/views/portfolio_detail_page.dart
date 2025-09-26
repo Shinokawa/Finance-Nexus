@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/local/app_database.dart';
 import '../../../design/design_system.dart';
 import '../../../providers/repository_providers.dart';
-import '../../../providers/chart_data_providers.dart';
+import '../../../providers/historical_net_worth_providers.dart';
 import '../../../widgets/net_worth_chart.dart';
 import '../../../widgets/simple_pie_chart.dart';
 import '../../dashboard/models/holding_position.dart';
@@ -53,15 +53,10 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 投资组合概览卡片
         _buildPortfolioSummaryCard(dashboardAsync),
         const SizedBox(height: 16),
-        
-        // 统计和图表预览区域
         _buildAnalyticsSection(dashboardAsync),
         const SizedBox(height: 16),
-        
-        // 持仓列表标题
         Text(
           '持仓列表',
           style: QHTypography.title3.copyWith(
@@ -70,21 +65,21 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
           ),
         ),
         const SizedBox(height: 12),
-        
-        // 持仓列表
-        if (holdings.isEmpty) 
+        if (holdings.isEmpty)
           const _EmptyHoldingsView()
         else
-          ...holdings.map((holding) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _HoldingCard(
-              holding: holding,
-              dashboardAsync: dashboardAsync,
-              onTrade: () => _showTradeForm(holding),
-              onEdit: () => _showEditHolding(holding),
-              onDelete: () => _showDeleteHolding(holding),
+          ...holdings.map(
+            (holding) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _HoldingCard(
+                holding: holding,
+                dashboardAsync: dashboardAsync,
+                onTrade: () => _showTradeForm(holding),
+                onEdit: () => _showEditHolding(holding),
+                onDelete: () => _showDeleteHolding(holding),
+              ),
             ),
-          )),
+          ),
       ],
     );
   }
@@ -369,11 +364,32 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
                   padding: const EdgeInsets.all(12),
                   child: Consumer(
                     builder: (context, ref, child) {
-                      final netWorthHistory = ref.watch(portfolioNetWorthHistoryProvider(widget.portfolio.id));
-                      return NetWorthChart(
-                        netWorthHistory: netWorthHistory,
-                        height: 120,
-                        showTimeSelector: true,
+                      final dataAsync = ref.watch(
+                        portfolioHistoricalNetWorthProvider((
+                          portfolioId: widget.portfolio.id,
+                          timeRange: '1Y',
+                        )),
+                      );
+                      return dataAsync.when(
+                        data: (data) => NetWorthChart(
+                          netWorthHistory: data,
+                          height: 120,
+                          showTimeSelector: true,
+                        ),
+                        loading: () => const Center(
+                          child: CupertinoActivityIndicator(),
+                        ),
+                        error: (error, stackTrace) => Center(
+                          child: Text(
+                            '加载失败',
+                            style: QHTypography.footnote.copyWith(
+                              color: CupertinoDynamicColor.resolve(
+                                CupertinoColors.secondaryLabel,
+                                context,
+                              ),
+                            ),
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -910,14 +926,6 @@ String _formatSignedCurrency(double? value) {
   }
   final sign = value > 0 ? '+' : '-';
   return '$sign¥$absValue';
-}
-
-String _formatPercent(double? value) {
-  if (value == null) {
-    return '--';
-  }
-  final sign = value >= 0 ? '+' : '';
-  return '$sign${value.toStringAsFixed(2)}%';
 }
 
 List<PieChartData> _buildPieChartData(

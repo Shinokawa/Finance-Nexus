@@ -6,18 +6,6 @@ import 'package:crypto/crypto.dart';
 
 /// 历史行情数据模型
 class HistoricalData {
-  final String date;
-  final double open;
-  final double close;
-  final double high;
-  final double low;
-  final int volume;
-  final double amount;
-  final double amplitude;
-  final double changePercent;
-  final double changeAmount;
-  final double turnoverRate;
-
   HistoricalData({
     required this.date,
     required this.open,
@@ -32,25 +20,37 @@ class HistoricalData {
     required this.turnoverRate,
   });
 
+  final DateTime date;
+  final double open;
+  final double close;
+  final double high;
+  final double low;
+  final int volume;
+  final double amount;
+  final double amplitude;
+  final double changePercent;
+  final double changeAmount;
+  final double turnoverRate;
+
   factory HistoricalData.fromJson(Map<String, dynamic> json) {
     return HistoricalData(
-      date: json['日期'] as String,
-      open: (json['开盘'] as num).toDouble(),
-      close: (json['收盘'] as num).toDouble(),
-      high: (json['最高'] as num).toDouble(),
-      low: (json['最低'] as num).toDouble(),
-      volume: (json['成交量'] as num).toInt(),
-      amount: (json['成交额'] as num).toDouble(),
-      amplitude: (json['振幅'] as num).toDouble(),
-      changePercent: (json['涨跌幅'] as num).toDouble(),
-      changeAmount: (json['涨跌额'] as num).toDouble(),
-      turnoverRate: (json['换手率'] as num).toDouble(),
+      date: _parseDate(json['日期']),
+      open: _parseDouble(json['开盘']),
+      close: _parseDouble(json['收盘']),
+      high: _parseDouble(json['最高']),
+      low: _parseDouble(json['最低']),
+      volume: _parseInt(json['成交量']),
+      amount: _parseDouble(json['成交额']),
+      amplitude: _parseDouble(json['振幅']),
+      changePercent: _parseDouble(json['涨跌幅']),
+      changeAmount: _parseDouble(json['涨跌额']),
+      turnoverRate: _parseDouble(json['换手率']),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      '日期': date,
+      '日期': _formatDate(date),
       '开盘': open,
       '收盘': close,
       '最高': high,
@@ -63,67 +63,148 @@ class HistoricalData {
       '换手率': turnoverRate,
     };
   }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value == null) {
+      throw const FormatException('缺少日期字段');
+    }
+    final raw = value.toString().trim();
+    if (raw.isEmpty) {
+      throw const FormatException('日期字段为空');
+    }
+    // 支持 YYYY-MM-DD 或 YYYYMMDD
+    if (raw.contains('-')) {
+      return DateTime.parse(raw);
+    }
+    if (raw.contains('/')) {
+      final segments = raw.split('/');
+      if (segments.length == 3) {
+        final yyyy = segments[0].padLeft(4, '0');
+        final mm = segments[1].padLeft(2, '0');
+        final dd = segments[2].padLeft(2, '0');
+        return DateTime.parse('$yyyy-$mm-$dd');
+      }
+    }
+    if (raw.length == 8) {
+      final yyyy = raw.substring(0, 4);
+      final mm = raw.substring(4, 6);
+      final dd = raw.substring(6, 8);
+      return DateTime.parse('$yyyy-$mm-$dd');
+    }
+    return DateTime.parse(raw);
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) {
+      return 0;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    final raw = value.toString().trim();
+    if (raw.isEmpty) {
+      return 0;
+    }
+    return double.tryParse(raw.replaceAll(RegExp(r'[,%\s]'), '')) ?? 0;
+  }
+
+  static int _parseInt(dynamic value) {
+    if (value == null) {
+      return 0;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    final parsed = int.tryParse(value.toString());
+    if (parsed != null) {
+      return parsed;
+    }
+    final asDouble = double.tryParse(value.toString());
+    return asDouble?.toInt() ?? 0;
+  }
+
+  static String _formatDate(DateTime date) {
+    final yyyy = date.year.toString().padLeft(4, '0');
+    final mm = date.month.toString().padLeft(2, '0');
+    final dd = date.day.toString().padLeft(2, '0');
+    return '$yyyy-$mm-$dd';
+  }
 }
 
 /// 市场数据服务类
 class MarketDataService {
   static const String _baseUrl = 'http://74.226.178.107:57777/api/history';
-  // 移除缓存过期时间，让缓存持续存在
-  
+  static const Duration _defaultHistoryWindow = Duration(days: 365);
+
   /// 获取历史行情数据（带智能增量更新）
   static Future<List<HistoricalData>> getHistoricalData({
     required String symbol,
     String? startDate,
     String? endDate,
   }) async {
+    final now = DateTime.now();
+    final defaultEnd = _determineHistoricalEndDate(now);
+    var normalizedEnd = endDate != null ? _parseRequestDate(endDate) : defaultEnd;
+    if (normalizedEnd.isAfter(defaultEnd)) {
+      normalizedEnd = defaultEnd;
+    }
+    var normalizedStart = startDate != null ? _parseRequestDate(startDate) : normalizedEnd.subtract(_defaultHistoryWindow);
+    normalizedStart = _normalizeDate(normalizedStart);
+    normalizedEnd = _normalizeDate(normalizedEnd);
+    if (!normalizedStart.isBefore(normalizedEnd)) {
+      normalizedStart = normalizedEnd.subtract(const Duration(days: 30));
+    }
+
     try {
-      // 检查本地缓存
       final cachedData = await _getCachedData(symbol);
-      
+
       if (cachedData != null && cachedData.isNotEmpty) {
-        // 检查是否需要增量更新
+        cachedData.sort((a, b) => a.date.compareTo(b.date));
+
         final needsUpdate = await _needsIncrementalUpdate(
-          symbol, 
-          cachedData, 
-          startDate, 
-          endDate
+          cachedData,
+          normalizedStart,
+          normalizedEnd,
         );
-        
+
         if (!needsUpdate) {
-          // 过滤缓存数据到请求的日期范围
-          final filteredData = _filterDataByDateRange(cachedData, startDate, endDate);
-          print('[INFO] 使用完整缓存数据: $symbol (${filteredData.length}条记录)');
+          final filteredData = _filterDataByDateRange(cachedData, normalizedStart, normalizedEnd);
+          print('[INFO] 使用缓存数据: $symbol (${filteredData.length}条记录)');
           return filteredData;
         }
-        
-        // 执行增量更新
+
         final updatedData = await _performIncrementalUpdate(
-          symbol, 
-          cachedData, 
-          startDate, 
-          endDate
+          symbol,
+          cachedData,
+          normalizedStart,
+          normalizedEnd,
         );
-        
-        // 过滤到请求的日期范围
-        final filteredData = _filterDataByDateRange(updatedData, startDate, endDate);
+
+        final filteredData = _filterDataByDateRange(updatedData, normalizedStart, normalizedEnd);
         return filteredData;
       }
-      
-      // 没有缓存，执行完整请求
-      print('[INFO] 执行完整数据请求: $symbol');
-      final data = await _fetchFromApi(symbol, startDate, endDate);
-      
-      // 保存到本地缓存
+
+      print('[INFO] 缓存缺失，执行完整数据请求: $symbol');
+      final data = await _fetchFromApi(symbol, normalizedStart, normalizedEnd);
+      data.sort((a, b) => a.date.compareTo(b.date));
       await _cacheData(symbol, data);
-      
-      return data;
+      return _filterDataByDateRange(data, normalizedStart, normalizedEnd);
     } catch (e) {
       print('[ERROR] 获取历史数据失败: $e');
-      // 如果API失败，尝试返回缓存数据
       final cachedData = await _getCachedData(symbol);
-      if (cachedData != null) {
+      if (cachedData != null && cachedData.isNotEmpty) {
         print('[INFO] 使用备用缓存数据');
-        return _filterDataByDateRange(cachedData, startDate, endDate);
+        final filteredData = _filterDataByDateRange(
+          cachedData,
+          normalizedStart,
+          normalizedEnd,
+        );
+        if (filteredData.isNotEmpty) {
+          return filteredData;
+        }
       }
       rethrow;
     }
@@ -131,46 +212,33 @@ class MarketDataService {
 
   /// 检查是否需要增量更新
   static Future<bool> _needsIncrementalUpdate(
-    String symbol,
     List<HistoricalData> cachedData,
-    String? requestStartDate,
-    String? requestEndDate,
+    DateTime requestStart,
+    DateTime requestEnd,
   ) async {
-    if (cachedData.isEmpty) return true;
-    
-    // 获取缓存的日期范围
+    if (cachedData.isEmpty) {
+      return true;
+    }
+
     final cachedStartDate = cachedData.first.date;
     final cachedEndDate = cachedData.last.date;
-    
-    final today = DateTime.now().toString().substring(0, 10).replaceAll('-', '');
-    final targetEndDate = requestEndDate ?? today;
-    
-    // 检查请求范围是否完全在缓存范围内
-    final requestStart = requestStartDate ?? '20200101';
-    
-    // 如果请求的开始日期早于缓存开始日期，需要补充历史数据
-    if (_compareDateStrings(requestStart, cachedStartDate) < 0) {
-      print('[INFO] 需要补充历史数据: 请求$requestStart, 缓存从$cachedStartDate开始');
+
+    if (requestStart.isBefore(cachedStartDate)) {
+      print('[INFO] 需要补充更早的历史数据: 请求${requestStart.toIso8601String()}, 缓存起始${cachedStartDate.toIso8601String()}');
       return true;
     }
-    
-    // 如果请求的结束日期晚于缓存结束日期，需要补充最新数据
-    if (_compareDateStrings(targetEndDate, cachedEndDate) > 0) {
-      print('[INFO] 需要补充最新数据: 请求到$targetEndDate, 缓存到$cachedEndDate');
+
+    if (requestEnd.isAfter(cachedEndDate)) {
+      print('[INFO] 需要补充最新数据: 请求截至${requestEnd.toIso8601String()}, 缓存截至${cachedEndDate.toIso8601String()}');
       return true;
     }
-    
-    // 检查最后更新时间（如果缓存的最后日期是今天之前，可能需要更新今天的数据）
-    final lastCachedDate = DateTime.parse(cachedEndDate.replaceAll('-', '').substring(0, 4) + 
-        '-' + cachedEndDate.replaceAll('-', '').substring(4, 6) + 
-        '-' + cachedEndDate.replaceAll('-', '').substring(6, 8));
-    final todayDate = DateTime.now();
-    
-    if (todayDate.difference(lastCachedDate).inDays >= 1) {
-      print('[INFO] 缓存数据需要更新到最新交易日');
+
+    final latestTradingCutoff = _determineHistoricalEndDate(DateTime.now());
+    if (cachedEndDate.isBefore(latestTradingCutoff)) {
+      print('[INFO] 缓存尚未覆盖最新交易日: 缓存截至${cachedEndDate.toIso8601String()}, 期望截至${latestTradingCutoff.toIso8601String()}');
       return true;
     }
-    
+
     return false;
   }
 
@@ -178,100 +246,93 @@ class MarketDataService {
   static Future<List<HistoricalData>> _performIncrementalUpdate(
     String symbol,
     List<HistoricalData> cachedData,
-    String? requestStartDate,
-    String? requestEndDate,
+    DateTime requestStart,
+    DateTime requestEnd,
   ) async {
-    final cachedStartDate = cachedData.first.date;
-    final cachedEndDate = cachedData.last.date;
-    final today = DateTime.now().toString().substring(0, 10).replaceAll('-', '');
-    final targetEndDate = requestEndDate ?? today;
-    final requestStart = requestStartDate ?? '20200101';
-    
-    final allData = <HistoricalData>[];
-    
-    // 补充历史数据（如果需要）
-    if (_compareDateStrings(requestStart, cachedStartDate) < 0) {
-      print('[INFO] 补充历史数据: $requestStart 到 $cachedStartDate');
-      try {
-        final historyData = await _fetchFromApi(symbol, requestStart, cachedStartDate);
-        // 移除重复的日期
-        final filteredHistoryData = historyData.where((data) => 
-          _compareDateStrings(data.date.replaceAll('-', ''), cachedStartDate.replaceAll('-', '')) < 0
-        ).toList();
-        allData.addAll(filteredHistoryData);
-      } catch (e) {
-        print('[WARN] 补充历史数据失败: $e');
+    final sortedCache = [...cachedData]..sort((a, b) => a.date.compareTo(b.date));
+    final merged = <DateTime, HistoricalData>{
+      for (final entry in sortedCache) _normalizeDate(entry.date): entry,
+    };
+
+    final cacheStart = sortedCache.first.date;
+    final cacheEnd = sortedCache.last.date;
+
+    if (requestStart.isBefore(cacheStart)) {
+      final olderData = await _fetchFromApi(
+        symbol,
+        requestStart,
+        _previousTradingDay(cacheStart),
+      );
+      for (final item in olderData) {
+        final key = _normalizeDate(item.date);
+        if (key.isBefore(cacheStart)) {
+          merged[key] = item;
+        }
       }
     }
-    
-    // 添加缓存数据
-    allData.addAll(cachedData);
-    
-    // 补充最新数据（如果需要）
-    if (_compareDateStrings(targetEndDate, cachedEndDate) > 0) {
-      print('[INFO] 补充最新数据: $cachedEndDate 到 $targetEndDate');
-      try {
-        final latestData = await _fetchFromApi(symbol, cachedEndDate, targetEndDate);
-        // 移除重复的日期
-        final filteredLatestData = latestData.where((data) => 
-          _compareDateStrings(data.date.replaceAll('-', ''), cachedEndDate.replaceAll('-', '')) > 0
-        ).toList();
-        allData.addAll(filteredLatestData);
-      } catch (e) {
-        print('[WARN] 补充最新数据失败: $e');
+
+    if (requestEnd.isAfter(cacheEnd)) {
+      final startForLatest = _nextTradingDay(cacheEnd);
+      if (!startForLatest.isAfter(requestEnd)) {
+        final latestData = await _fetchFromApi(
+          symbol,
+          startForLatest,
+          requestEnd,
+        );
+        for (final item in latestData) {
+          final key = _normalizeDate(item.date);
+          merged[key] = item;
+        }
       }
     }
-    
-    // 按日期排序
-    allData.sort((a, b) => _compareDateStrings(
-      a.date.replaceAll('-', ''), 
-      b.date.replaceAll('-', '')
-    ));
-    
-    // 保存更新后的完整数据
-    await _cacheData(symbol, allData);
-    
-    print('[INFO] 增量更新完成: $symbol (${allData.length}条记录)');
-    return allData;
+
+    final updated = merged.values.toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    await _cacheData(symbol, updated);
+
+    print('[INFO] 增量更新完成: $symbol (${updated.length}条记录)');
+    return updated;
   }
 
   /// 根据日期范围过滤数据
   static List<HistoricalData> _filterDataByDateRange(
     List<HistoricalData> data,
-    String? startDate,
-    String? endDate,
+    DateTime startDate,
+    DateTime endDate,
   ) {
-    if (data.isEmpty) return data;
-    
-    final start = startDate ?? '20200101';
-    final end = endDate ?? DateTime.now().toString().substring(0, 10).replaceAll('-', '');
-    
-    return data.where((item) {
-      final itemDate = item.date.replaceAll('-', '');
-      return _compareDateStrings(itemDate, start) >= 0 && 
-             _compareDateStrings(itemDate, end) <= 0;
-    }).toList();
-  }
+    if (data.isEmpty) {
+      return const [];
+    }
 
-  /// 比较日期字符串 (YYYYMMDD 格式)
-  static int _compareDateStrings(String date1, String date2) {
-    return date1.compareTo(date2);
+    final normalizedStart = _normalizeDate(startDate);
+    final normalizedEnd = _normalizeDate(endDate);
+
+    return data
+        .where((item) {
+          final date = _normalizeDate(item.date);
+          return !date.isBefore(normalizedStart) && !date.isAfter(normalizedEnd);
+        })
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
   }
 
   /// 从API获取数据
   static Future<List<HistoricalData>> _fetchFromApi(
     String symbol,
-    String? startDate,
-    String? endDate,
+    DateTime startDate,
+    DateTime endDate,
   ) async {
+    final formattedStart = _formatDateForApi(_normalizeDate(startDate));
+    final formattedEnd = _formatDateForApi(_normalizeDate(endDate));
     final uri = Uri.parse(_baseUrl).replace(queryParameters: {
       'symbol': symbol,
-      if (startDate != null) 'start_date': startDate,
-      if (endDate != null) 'end_date': endDate,
+      'start_date': formattedStart,
+      'end_date': formattedEnd,
     });
 
     print('[INFO] 请求历史数据: $uri');
-    
+
     final response = await http.get(uri).timeout(
       const Duration(seconds: 30),
       onTimeout: () => throw Exception('请求超时'),
@@ -282,13 +343,17 @@ class MarketDataService {
     }
 
     final jsonData = json.decode(response.body) as Map<String, dynamic>;
-    
+
     if (jsonData['status'] != 'success') {
       throw Exception('API返回错误: ${jsonData['message']}');
     }
 
-    final dataList = jsonData['data'] as List<dynamic>;
-    return dataList.map((item) => HistoricalData.fromJson(item as Map<String, dynamic>)).toList();
+    final dataList = (jsonData['data'] as List<dynamic>)
+        .map((item) => HistoricalData.fromJson(item as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    return dataList;
   }
 
   /// 生成缓存文件名（每个股票一个文件）
@@ -311,7 +376,10 @@ class MarketDataService {
       final cacheData = json.decode(fileContent) as Map<String, dynamic>;
       
       final dataList = cacheData['data'] as List<dynamic>;
-      final result = dataList.map((item) => HistoricalData.fromJson(item as Map<String, dynamic>)).toList();
+      final result = dataList
+          .map((item) => HistoricalData.fromJson(item as Map<String, dynamic>))
+          .toList()
+        ..sort((a, b) => a.date.compareTo(b.date));
       
       print('[INFO] 读取缓存数据: $symbol (${result.length}条记录)');
       return result;
@@ -331,8 +399,8 @@ class MarketDataService {
         'cachedAt': DateTime.now().toIso8601String(),
         'symbol': symbol,
         'dataCount': data.length,
-        'startDate': data.isNotEmpty ? data.first.date : null,
-        'endDate': data.isNotEmpty ? data.last.date : null,
+        'startDate': data.isNotEmpty ? HistoricalData._formatDate(data.first.date) : null,
+        'endDate': data.isNotEmpty ? HistoricalData._formatDate(data.last.date) : null,
         'data': data.map((item) => item.toJson()).toList(),
       };
       
@@ -415,5 +483,57 @@ class MarketDataService {
       print('[ERROR] 获取缓存统计失败: $e');
       return {};
     }
+  }
+
+  static DateTime _determineHistoricalEndDate(DateTime now) {
+    var cursor = _normalizeDate(now);
+    // 始终回退到最近一个已经收盘的交易日
+    if (_isTradingDay(cursor)) {
+      cursor = _previousTradingDay(cursor);
+    } else {
+      cursor = _previousTradingDay(cursor);
+    }
+    return cursor;
+  }
+
+  static bool _isTradingDay(DateTime date) => date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;
+
+  static DateTime _previousTradingDay(DateTime date) {
+    var cursor = _normalizeDate(date);
+    do {
+      cursor = cursor.subtract(const Duration(days: 1));
+    } while (!_isTradingDay(cursor));
+    return cursor;
+  }
+
+  static DateTime _nextTradingDay(DateTime date) {
+    var cursor = _normalizeDate(date);
+    do {
+      cursor = cursor.add(const Duration(days: 1));
+    } while (!_isTradingDay(cursor));
+    return cursor;
+  }
+
+  static DateTime _normalizeDate(DateTime date) => DateTime(date.year, date.month, date.day);
+
+  static String _formatDateForApi(DateTime date) {
+    final yyyy = date.year.toString().padLeft(4, '0');
+    final mm = date.month.toString().padLeft(2, '0');
+    final dd = date.day.toString().padLeft(2, '0');
+    return '$yyyy$mm$dd';
+  }
+
+  static DateTime _parseRequestDate(String value) {
+    final sanitized = value.trim();
+    if (sanitized.contains('-')) {
+      return _normalizeDate(DateTime.parse(sanitized));
+    }
+    if (sanitized.length == 8) {
+      final yyyy = sanitized.substring(0, 4);
+      final mm = sanitized.substring(4, 6);
+      final dd = sanitized.substring(6, 8);
+      return _normalizeDate(DateTime.parse('$yyyy-$mm-$dd'));
+    }
+    return _normalizeDate(DateTime.parse(sanitized));
   }
 }

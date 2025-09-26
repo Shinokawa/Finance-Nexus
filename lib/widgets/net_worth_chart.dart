@@ -1,12 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../design/design_system.dart';
 
 /// 净值曲线图表组件（带时间段选择）
-class NetWorthChart extends ConsumerStatefulWidget {
+class NetWorthChart extends StatefulWidget {
   const NetWorthChart({
     super.key,
     this.netWorthHistory,
@@ -19,16 +18,17 @@ class NetWorthChart extends ConsumerStatefulWidget {
   final bool showTimeSelector;
 
   @override
-  ConsumerState<NetWorthChart> createState() => _NetWorthChartState();
+  State<NetWorthChart> createState() => _NetWorthChartState();
 }
 
 enum TimeRange { threeMonths, sixMonths, oneYear }
 
-class _NetWorthChartState extends ConsumerState<NetWorthChart> {
+class _NetWorthChartState extends State<NetWorthChart> {
   TimeRange _selectedRange = TimeRange.threeMonths;
 
   List<NetWorthDataPoint> _getFilteredData() {
-    final data = widget.netWorthHistory ?? [];
+    final data = [...?widget.netWorthHistory]
+      ..sort((a, b) => a.date.compareTo(b.date));
     if (!widget.showTimeSelector || data.isEmpty) {
       return data;
     }
@@ -48,7 +48,7 @@ class _NetWorthChartState extends ConsumerState<NetWorthChart> {
         break;
     }
 
-    return data.where((point) => point.date.isAfter(startDate)).toList();
+  return data.where((point) => !point.date.isBefore(startDate)).toList();
   }
 
   @override
@@ -80,19 +80,17 @@ class _NetWorthChartState extends ConsumerState<NetWorthChart> {
           const SizedBox(height: 12),
         ],
         Expanded(
-          child: Container(
-            child: CustomPaint(
-              painter: _NetWorthChartPainter(
-                dataPoints: data,
-                lineColor: CupertinoDynamicColor.resolve(QHColors.primary, context),
-                fillColor: CupertinoDynamicColor.resolve(
-                  QHColors.primary.withValues(alpha: 0.1),
-                  context,
-                ),
-                dotColor: CupertinoDynamicColor.resolve(QHColors.primary, context),
+          child: CustomPaint(
+            painter: _NetWorthChartPainter(
+              dataPoints: data,
+              lineColor: CupertinoDynamicColor.resolve(QHColors.primary, context),
+              fillColor: CupertinoDynamicColor.resolve(
+                QHColors.primary.withValues(alpha: 0.1),
+                context,
               ),
-              size: Size.infinite,
+              dotColor: CupertinoDynamicColor.resolve(QHColors.primary, context),
             ),
+            size: Size.infinite,
           ),
         ),
       ],
@@ -267,59 +265,3 @@ class _NetWorthChartPainter extends CustomPainter {
         oldDelegate.dotColor != dotColor;
   }
 }
-
-/// 模拟净值历史数据 Provider（基于2024年9月25日建仓的合理净值变化）
-final mockNetWorthHistoryProvider = Provider<List<NetWorthDataPoint>>((ref) {
-  final startDate = DateTime(2024, 9, 25); // 建仓日期
-  final now = DateTime.now();
-  final data = <NetWorthDataPoint>[];
-  
-  // 计算总投资成本（基于我们的模拟持仓）
-  const totalCost = 
-    2000.0 * 4.91 +      // 国电电力
-    100.0 * 1347.52 +    // 贵州茅台
-    500.0 * 116.36 +     // 五粮液
-    300.0 * 196.34 +     // 宁德时代
-    1000.0 * 26.21 +     // 海康威视
-    3000.0 * 9.89 +      // 平安银行
-    15000.0 * 0.655;     // 银行ETF
-  
-  // 生成从建仓日到今天的净值数据
-  var currentDate = startDate;
-  var dayCount = 0;
-  
-  while (currentDate.isBefore(now) && dayCount < 90) { // 最多90天
-    // 模拟净值波动：整体上涨趋势，但有合理的日间波动
-    final progress = dayCount / 60.0; // 60天为周期
-    final baseGrowth = progress * 0.15; // 整体15%的增长预期
-    
-    // 添加随机波动和趋势性变化
-    final randomFactor = (math.Random(dayCount).nextDouble() - 0.5) * 0.03;
-    final trendFactor = math.sin(progress * math.pi * 2) * 0.08; // 周期性波动
-    final marketSentiment = progress > 0.3 ? 0.02 : -0.01; // 后期更乐观
-    
-    final totalReturn = baseGrowth + randomFactor + trendFactor + marketSentiment;
-    final currentNetWorth = totalCost * (1 + totalReturn);
-    
-    data.add(NetWorthDataPoint(
-      date: currentDate,
-      value: currentNetWorth,
-    ));
-    
-    // 只在工作日添加数据点（跳过周末）
-    currentDate = currentDate.add(const Duration(days: 1));
-    if (currentDate.weekday <= 5) { // 周一到周五
-      dayCount++;
-    }
-  }
-  
-  // 确保至少有两个数据点
-  if (data.length < 2) {
-    data.addAll([
-      NetWorthDataPoint(date: startDate, value: totalCost),
-      NetWorthDataPoint(date: DateTime.now(), value: totalCost * 1.05),
-    ]);
-  }
-  
-  return data;
-});

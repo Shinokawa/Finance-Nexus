@@ -192,6 +192,10 @@ class HoldingDao extends DatabaseAccessor<AppDatabase>
         .get();
   }
 
+  Future<Holding?> getHoldingById(String id) {
+    return (select(holdings)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+  }
+
   Stream<List<Holding>> watchHoldingsByPortfolio(String portfolioId) {
     return (select(holdings)..where((tbl) => tbl.portfolioId.equals(portfolioId)))
         .watch();

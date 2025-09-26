@@ -513,7 +513,7 @@ class _PortfolioCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: CupertinoColors.systemRed.withOpacity(0.5), // 明显的红色背景用于调试
+          color: cardColor,
           borderRadius: BorderRadius.circular(16),
           // 添加明显的边框用于调试
           border: Border.all(color: CupertinoColors.systemBlue, width: 2),

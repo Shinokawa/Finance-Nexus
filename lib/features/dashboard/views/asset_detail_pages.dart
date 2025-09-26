@@ -5,9 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/enums.dart';
 import '../../../design/design_system.dart';
 import '../../../widgets/net_worth_chart.dart';
-import '../../portfolios/providers/portfolio_detail_providers.dart';
 import '../../../widgets/simple_pie_chart.dart';
-import '../../../services/market_data_service.dart';
 import '../../../providers/historical_net_worth_providers.dart';
 import '../models/holding_position.dart';
 import '../providers/dashboard_providers.dart';
@@ -116,7 +114,10 @@ class _PortfolioContent extends StatelessWidget {
               _InfoHint(text: description),
             ],
             const SizedBox(height: 24),
-            const _PerformancePreview(),
+            _PerformancePreview(
+              kind: _PerformancePreviewKind.portfolio,
+              targetId: snapshot.portfolio.id,
+            ),
             const SizedBox(height: 24),
             _PieChartSection(
               positions: positions,
@@ -176,7 +177,12 @@ class _AccountContent extends StatelessWidget {
               value: account.createdAt.toLocal().toString(),
             ),
             const SizedBox(height: 24),
-            const _PerformancePreview(),
+            _PerformancePreview(
+              kind: account.type == AccountType.investment
+                  ? _PerformancePreviewKind.account
+                  : _PerformancePreviewKind.total,
+              targetId: account.id,
+            ),
             const SizedBox(height: 24),
             if (account.type == AccountType.investment)
               _HoldingBreakdownList(
@@ -220,7 +226,10 @@ class _HoldingContent extends StatelessWidget {
           children: [
             _HoldingOverviewCard(position: position),
             const SizedBox(height: 24),
-            const _PerformancePreview(),
+            _PerformancePreview(
+              kind: _PerformancePreviewKind.holding,
+              targetId: position.holding.id,
+            ),
             const SizedBox(height: 24),
             
             // 基础信息
@@ -583,17 +592,53 @@ class _HoldingOverviewCard extends StatelessWidget {
   }
 }
 
-class _PerformancePreview extends StatefulWidget {
-  const _PerformancePreview();
+enum _PerformancePreviewKind { total, portfolio, account, holding }
+
+class _PerformancePreview extends ConsumerWidget {
+  const _PerformancePreview({
+    required this.kind,
+    this.targetId,
+  });
+
+  final _PerformancePreviewKind kind;
+  final String? targetId;
+
+  AsyncValue<List<NetWorthDataPoint>> _watchSeries(WidgetRef ref, String rangeKey) {
+    switch (kind) {
+      case _PerformancePreviewKind.portfolio:
+        final id = targetId;
+        if (id == null) {
+          return const AsyncValue.data([]);
+        }
+        return ref.watch(
+          portfolioHistoricalNetWorthProvider((portfolioId: id, timeRange: rangeKey)),
+        );
+      case _PerformancePreviewKind.account:
+        final id = targetId;
+        if (id == null) {
+          return const AsyncValue.data([]);
+        }
+        return ref.watch(
+          accountHistoricalNetWorthProvider((accountId: id, timeRange: rangeKey)),
+        );
+      case _PerformancePreviewKind.holding:
+        final holdingId = targetId;
+        if (holdingId == null) {
+          return const AsyncValue.data([]);
+        }
+        return ref.watch(
+          holdingHistoricalNetWorthProvider((holdingId: holdingId, timeRange: rangeKey)),
+        );
+      case _PerformancePreviewKind.total:
+        return ref.watch(totalHistoricalNetWorthProvider(rangeKey));
+    }
+  }
 
   @override
-  State<_PerformancePreview> createState() => _PerformancePreviewState();
-}
-
-class _PerformancePreviewState extends State<_PerformancePreview> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    const rangeKey = '1Y';
     final cardColor = CupertinoDynamicColor.resolve(QHColors.cardBackground, context);
+    final dataAsync = _watchSeries(ref, rangeKey);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -612,7 +657,6 @@ class _PerformancePreviewState extends State<_PerformancePreview> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 净值曲线图表
             Container(
               height: 160,
               width: double.infinity,
@@ -625,32 +669,27 @@ class _PerformancePreviewState extends State<_PerformancePreview> {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Consumer(
-                  builder: (context, ref, child) {
-                    final dataAsync = ref.watch(totalHistoricalNetWorthProvider('3M'));
-                    return dataAsync.when(
-                      data: (data) => NetWorthChart(
-                        netWorthHistory: data,
-                        height: 150,
-                        showTimeSelector: true,
+                child: dataAsync.when(
+                  data: (data) => NetWorthChart(
+                    netWorthHistory: data,
+                    height: 150,
+                    showTimeSelector: true,
+                  ),
+                  loading: () => Container(
+                    height: 150,
+                    alignment: Alignment.center,
+                    child: const CupertinoActivityIndicator(),
+                  ),
+                  error: (error, stack) => Container(
+                    height: 150,
+                    alignment: Alignment.center,
+                    child: Text(
+                      '加载失败',
+                      style: QHTypography.footnote.copyWith(
+                        color: CupertinoColors.secondaryLabel,
                       ),
-                      loading: () => Container(
-                        height: 150,
-                        alignment: Alignment.center,
-                        child: const CupertinoActivityIndicator(),
-                      ),
-                      error: (error, stack) => Container(
-                        height: 150,
-                        alignment: Alignment.center,
-                        child: Text(
-                          '加载失败',
-                          style: QHTypography.footnote.copyWith(
-                            color: CupertinoColors.secondaryLabel,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
             ),
