@@ -44,6 +44,7 @@ dependencies:
   http: ^1.2.1
   crypto: ^3.0.5
   shared_preferences: ^2.3.2
+  package_info_plus: ^8.0.2
 
 dev_dependencies:
   flutter_test:

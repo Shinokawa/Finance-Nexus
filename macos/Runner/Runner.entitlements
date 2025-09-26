@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 网络访问权限 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	
+	<!-- 文件访问权限 -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	
+	<!-- 禁用库验证（Flutter需要） -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	
+	<!-- 允许JIT（Flutter需要） -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	
+	<!-- 允许unsigned executable memory（Flutter需要） -->
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>

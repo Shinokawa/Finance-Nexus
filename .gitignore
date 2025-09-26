@@ -85,3 +85,5 @@ build/
 .android/
 .ios/
 .flutter-plugins
+
+scripts/

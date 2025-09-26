@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../design/design_system.dart';
 import '../../../providers/app_settings_provider.dart';
+import '../../../providers/app_info_provider.dart';
 import '../widgets/backend_config_section.dart';
 
 class SettingsTabView extends ConsumerWidget {
@@ -199,9 +201,18 @@ class SettingsTabView extends ConsumerWidget {
                 _SettingsSection(
                   title: '关于',
                   children: [
-                    _SettingsListTile(
-                      title: '版本信息',
-                      trailing: 'v1.0.0',
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final version = ref.watch(appVersionProvider);
+                        return _SettingsListTile(
+                          title: '版本信息',
+                          trailing: version.when(
+                            data: (v) => v,
+                            loading: () => '加载中...',
+                            error: (_, __) => 'v1.0.2',
+                          ),
+                        );
+                      },
                     ),
                     _SettingsListTile(
                       title: '开源许可',
