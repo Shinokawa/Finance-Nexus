@@ -1,6 +1,19 @@
 # Finance Nexus
 
+<!-- markdownlint-disable MD033 -->
+
 一个面向个人使用的"资产与投资记录"管理与可视化工具
+
+## 截图
+
+<div style="display: flex; flex-wrap: nowrap; justify-content: center; gap: 12px;">
+        <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.08.46.png" alt="仪表盘" style="width: 160px; border-radius: 12px;" />
+        <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.13.23.png" alt="持仓情况" style="width: 160px; border-radius: 12px;" />
+        <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.08.57.png" alt="账户" style="width: 160px; border-radius: 12px;" />
+        <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.09.09.png" alt="分析" style="width: 160px; border-radius: 12px;" />
+</div>
+
+<p align="center">仪表盘 · 持仓情况 · 账户 · 分析</p>
 
 ## 这是做什么的
 
@@ -131,7 +144,7 @@
    - 添加交易记录
    - 查看资产分析
 
-## 后端配置
+## 后端配置指南
 
 应用支持连接自定义后端服务来获取实时行情数据。你可以部署自己的后端服务，完全控制数据源。
 
@@ -171,8 +184,8 @@
 
    创建 `app.py` 文件并复制以下代码：
 
-   <details>
-   <summary>点击展开完整后端代码</summary>
+    <details>
+    <summary>点击展开完整后端代码</summary>
 
    ```python
    # coding: utf-8
@@ -458,12 +471,6 @@
 - ✅ 行情数据来源可自定义配置
 - ✅ 完全离线使用（除行情数据外）
 
-## 支持
-
-如果您遇到问题或有功能建议：
-
-- [提交 Issue](https://github.com/Shinokawa/Finance-Nexus/issues)
-- 联系作者
 
 ## 致谢
 
