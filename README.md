@@ -6,15 +6,15 @@
 
 ## 截图
 
-<div style="display: flex; flex-wrap: nowrap; justify-content: center; gap: 12px;">
-            <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.08.46.png" alt="仪表盘" style="width: 130px; border-radius: 12px;" />
-            <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.13.23.png" alt="持仓情况" style="width: 130px; border-radius: 12px;" />
-            <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.08.57.png" alt="账户" style="width: 130px; border-radius: 12px;" />
-            <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.09.09.png" alt="分析" style="width: 130px; border-radius: 12px;" />
-            <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.22.43.png" alt="分析矩阵" style="width: 130px; border-radius: 12px;" />
+<div style="display: flex; flex-wrap: nowrap; justify-content: center; gap: 12px; margin: 0 auto; max-width: 900px;">
+    <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.08.46.png" alt="仪表盘" style="width: 150px; border-radius: 12px;" />
+    <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.13.23.png" alt="持仓情况" style="width: 150px; border-radius: 12px;" />
+    <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.08.57.png" alt="账户" style="width: 150px; border-radius: 12px;" />
+    <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.09.09.png" alt="分析" style="width: 150px; border-radius: 12px;" />
+    <img src="pic/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-09-27%20at%2023.22.43.png" alt="分析矩阵" style="width: 150px; border-radius: 12px;" />
 </div>
 
-<p align="center">仪表盘 · 持仓情况 · 账户 · 分析</p>
+<p style="text-align: center; margin-top: 8px;">仪表盘 · 持仓情况 · 账户 · 分析 · 协方差矩阵</p>
 
 ## 这是做什么的
 
