@@ -14,6 +14,8 @@ import '../providers/portfolio_analytics_provider.dart';
 import '../widgets/analytics_heatmap.dart';
 import '../widgets/analytics_line_chart.dart';
 import '../widgets/analytics_metric_grid.dart';
+import '../widgets/analytics_contribution_cards.dart';
+import '../widgets/analytics_forecast_chart.dart';
 import 'spending_detail_view.dart';
 
 class AnalyticsTabView extends ConsumerWidget {
@@ -213,6 +215,14 @@ class _AnalyticsBody extends StatelessWidget {
       ),
     ];
 
+    final forecast = snapshot.forecast;
+    if (forecast != null && forecast.hasData) {
+      sections.addAll([
+        const SizedBox(height: 20),
+        AnalyticsForecastChart(forecast: forecast),
+      ]);
+    }
+
     if (snapshot.rollingVolatility.isNotEmpty) {
       sections.addAll([
         const SizedBox(height: 20),
@@ -227,6 +237,28 @@ class _AnalyticsBody extends StatelessWidget {
             ),
           ],
           valueFormatter: (value) => '${(value * 100).toStringAsFixed(1)}%',
+        ),
+      ]);
+    }
+
+    final attribution = snapshot.attribution;
+    if (attribution != null && attribution.entries.isNotEmpty) {
+      sections.addAll([
+        const SizedBox(height: 20),
+        _SectionCard(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+          child: ReturnAttributionCard(attribution: attribution),
+        ),
+      ]);
+    }
+
+    final riskContributions = snapshot.riskContributions;
+    if (riskContributions.isNotEmpty) {
+      sections.addAll([
+        const SizedBox(height: 20),
+        _SectionCard(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+          child: RiskContributionCard(contributions: riskContributions),
         ),
       ]);
     }

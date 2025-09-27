@@ -111,6 +111,9 @@ class PortfolioAnalyticsSnapshot {
     required this.dccMatrix,
     required this.dccPairSeries,
     required this.insights,
+    this.forecast,
+    this.attribution,
+    this.riskContributions = const [],
   });
 
   final NetWorthRange range;
@@ -124,6 +127,9 @@ class PortfolioAnalyticsSnapshot {
   final MatrixStats? dccMatrix;
   final List<PairCorrelationSeries> dccPairSeries;
   final List<AnalyticsInsight> insights;
+  final PortfolioForecastSnapshot? forecast;
+  final PortfolioAttribution? attribution;
+  final List<RiskContribution> riskContributions;
 
   static final empty = PortfolioAnalyticsSnapshot(
     range: NetWorthRange.lastThreeMonths,
@@ -137,7 +143,106 @@ class PortfolioAnalyticsSnapshot {
     dccMatrix: null,
     dccPairSeries: [],
     insights: [],
+    forecast: null,
+    attribution: null,
+    riskContributions: const [],
   );
+}
+
+/// 预测分位带
+@immutable
+class ForecastBand {
+  const ForecastBand({
+    required this.quantile,
+    required this.points,
+  });
+
+  /// 分位水平（例如 0.95 表示 95% 上界）
+  final double quantile;
+  final List<TimeSeriesPoint> points;
+}
+
+/// 未来净值预测结果
+@immutable
+class PortfolioForecastSnapshot {
+  const PortfolioForecastSnapshot({
+    required this.generatedAt,
+    required this.simulationCount,
+    required this.horizonDays,
+    required this.expected,
+    required this.bands,
+  });
+
+  final DateTime generatedAt;
+  final int simulationCount;
+  final int horizonDays;
+  final List<TimeSeriesPoint> expected;
+  final List<ForecastBand> bands;
+
+  bool get hasData => expected.length >= 2 && bands.isNotEmpty;
+}
+
+@immutable
+class ReturnContribution {
+  const ReturnContribution({
+    required this.symbol,
+    required this.startWeight,
+    required this.returnRate,
+    required this.contribution,
+    required this.allocationEffect,
+    required this.selectionEffect,
+    required this.interactionEffect,
+    this.isResidual = false,
+  });
+
+  final String symbol;
+  final double startWeight;
+  final double returnRate;
+  final double contribution;
+  final double allocationEffect;
+  final double selectionEffect;
+  final double interactionEffect;
+  final bool isResidual;
+}
+
+@immutable
+class PortfolioAttribution {
+  const PortfolioAttribution({
+    required this.entries,
+    required this.totalReturn,
+    required this.totalAllocationEffect,
+    required this.totalSelectionEffect,
+    required this.totalInteractionEffect,
+  });
+
+  final List<ReturnContribution> entries;
+  final double totalReturn;
+  final double totalAllocationEffect;
+  final double totalSelectionEffect;
+  final double totalInteractionEffect;
+}
+
+@immutable
+class RiskContribution {
+  const RiskContribution({
+    required this.symbol,
+    required this.weight,
+    required this.weightValue,
+    required this.marginalVolatility,
+    required this.componentVolatility,
+    required this.componentVaR,
+    required this.varShare,
+    this.isResidual = false,
+  });
+
+  final String symbol;
+  final double weight;
+  final double weightValue;
+  final double marginalVolatility;
+  final double componentVolatility;
+  final double componentVaR;
+  final double varShare;
+  final bool isResidual;
 }
 
 @immutable

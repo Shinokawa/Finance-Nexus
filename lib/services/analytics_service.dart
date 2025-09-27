@@ -9,6 +9,7 @@ import '../data/repositories/portfolio_repository.dart';
 import '../data/repositories/transaction_repository.dart';
 import '../services/net_worth_series_service.dart';
 import 'market_data_service.dart';
+import 'forecast_projection_service.dart';
 
 class PortfolioAnalyticsService {
   PortfolioAnalyticsService({
@@ -17,6 +18,7 @@ class PortfolioAnalyticsService {
     required this.portfolioRepository,
     required this.transactionRepository,
     required this.marketDataService,
+    required this.forecastProjectionService,
   });
 
   final NetWorthSeriesService netWorthSeriesService;
@@ -24,6 +26,7 @@ class PortfolioAnalyticsService {
   final PortfolioRepository portfolioRepository;
   final TransactionRepository transactionRepository;
   final MarketDataService marketDataService;
+  final ForecastProjectionService forecastProjectionService;
 
   Future<PortfolioAnalyticsSnapshot> buildSnapshot({
     required NetWorthRange range,
@@ -53,6 +56,7 @@ class PortfolioAnalyticsService {
         dccMatrix: null,
         dccPairSeries: const [],
         insights: const [],
+        forecast: null,
       );
     }
 
@@ -61,13 +65,46 @@ class PortfolioAnalyticsService {
     final metrics = _constructHeadlineMetrics(netWorthSeries, returnSeries);
     final rollingVolatility = _computeRollingVolatility(returnSeries);
 
-    final riskMatrices = await _buildRiskMatrices(
+    final quantityBySymbol = await _loadAggregatedQuantities(target);
+    final symbolData = await _loadSymbolData(
+      symbols: quantityBySymbol.keys,
+      rangeStart: netWorthSeries.first.date,
+      rangeEnd: netWorthSeries.last.date,
+    );
+
+    final attribution = _buildAttribution(
+      netWorthSeries: netWorthSeries,
+      quantityBySymbol: quantityBySymbol,
+      symbolData: symbolData,
+    );
+
+    double portfolioVaRLevel = 0;
+    for (final metric in metrics) {
+      if (metric.label == '95% VaR') {
+        portfolioVaRLevel = metric.value.abs();
+        break;
+      }
+    }
+
+    final riskMatrices = _buildRiskMatrices(
       range: range,
       netWorthSeries: netWorthSeries,
       target: target,
+      quantityBySymbol: quantityBySymbol,
+      symbolData: symbolData,
+      portfolioValue: netWorthSeries.last.value,
+      portfolioVaRLevel: portfolioVaRLevel,
     );
 
-    final insights = _generateInsights(metrics, riskMatrices);
+    final insights = _generateInsights(
+      metrics,
+      riskMatrices,
+      attribution,
+    );
+    final forecast = forecastProjectionService.project(
+      netWorthSeries: netWorthSeries,
+      returnSeries: returnSeries,
+    );
 
     return PortfolioAnalyticsSnapshot(
       range: range,
@@ -81,6 +118,9 @@ class PortfolioAnalyticsService {
       dccMatrix: riskMatrices.dccMatrix,
       dccPairSeries: riskMatrices.dccPairSeries,
       insights: insights,
+      forecast: forecast,
+      attribution: attribution,
+      riskContributions: riskMatrices.riskContributions,
     );
   }
 
@@ -413,77 +453,255 @@ class PortfolioAnalyticsService {
     return result;
   }
 
-  Future<_RiskMatrices> _buildRiskMatrices({
-    required NetWorthRange range,
+  PortfolioAttribution? _buildAttribution({
     required List<NetWorthDataPoint> netWorthSeries,
-    required PortfolioAnalyticsTarget target,
-  }) async {
-    if (target.type == PortfolioAnalyticsTargetType.portfolio &&
-        target.id == null) {
-      return const _RiskMatrices.empty();
+    required Map<String, double> quantityBySymbol,
+    required Map<String, _SymbolData> symbolData,
+  }) {
+    if (netWorthSeries.length < 2 || quantityBySymbol.isEmpty) {
+      return null;
     }
 
+    final startDate = netWorthSeries.first.date;
+    final endDate = netWorthSeries.last.date;
+    final portfolioStart = netWorthSeries.first.value;
+    final portfolioEnd = netWorthSeries.last.value;
+
+    if (portfolioStart.abs() < 1e-6) {
+      return null;
+    }
+
+    final rows = <_AttributionRow>[];
+    double holdingsStartTotal = 0;
+    double holdingsEndTotal = 0;
+
+    for (final entry in quantityBySymbol.entries) {
+      final data = symbolData[entry.key];
+      if (data == null) {
+        continue;
+      }
+      final startPrice = _priceOnOrBefore(data.priceByDate, startDate);
+      if (startPrice == null) {
+        continue;
+      }
+      final endPrice = _priceOnOrBefore(data.priceByDate, endDate) ?? data.latestPrice;
+      final startValue = startPrice * entry.value;
+      final endValue = endPrice * entry.value;
+      holdingsStartTotal += startValue;
+      holdingsEndTotal += endValue;
+      rows.add(
+        _AttributionRow(
+          symbol: entry.key,
+          startValue: startValue,
+          endValue: endValue,
+          isResidual: false,
+        ),
+      );
+    }
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    final residualStart = portfolioStart - holdingsStartTotal;
+    final residualEnd = portfolioEnd - holdingsEndTotal;
+    final residualThreshold = portfolioStart.abs() * 0.01;
+    if (residualStart.abs() > residualThreshold ||
+        residualEnd.abs() > residualThreshold) {
+      rows.add(
+        _AttributionRow(
+          symbol: '现金/其他',
+          startValue: residualStart,
+          endValue: residualEnd,
+          isResidual: true,
+        ),
+      );
+    }
+
+    final returnsByRow = <_AttributionRow, double>{};
+    double averageReturn = 0;
+    for (final row in rows) {
+      final startValue = row.startValue;
+      final returnRate = startValue.abs() < 1e-6
+          ? 0.0
+          : (row.endValue - row.startValue) / row.startValue;
+      returnsByRow[row] = returnRate;
+      averageReturn += returnRate;
+    }
+
+    if (rows.isNotEmpty) {
+      averageReturn /= rows.length;
+    }
+
+    final entries = <ReturnContribution>[];
+    final assetCount = rows.length;
+    final equalWeight = assetCount == 0 ? 0.0 : 1 / assetCount;
+    double totalAllocation = 0;
+    double totalSelection = 0;
+    double totalInteraction = 0;
+
+    for (final row in rows) {
+      final returnRate = returnsByRow[row] ?? 0;
+      final weight = portfolioStart.abs() < 1e-6
+          ? 0.0
+          : row.startValue / portfolioStart;
+      final contribution = weight * returnRate;
+      final benchmarkWeight = row.isResidual ? 0.0 : equalWeight;
+      final allocationEffect = (weight - benchmarkWeight) * averageReturn;
+      final selectionEffect =
+          benchmarkWeight == 0 ? 0.0 : benchmarkWeight * (returnRate - averageReturn);
+      final interactionEffect =
+          (weight - benchmarkWeight) * (returnRate - averageReturn);
+
+      totalAllocation += allocationEffect;
+      totalSelection += selectionEffect;
+      totalInteraction += interactionEffect;
+
+      entries.add(
+        ReturnContribution(
+          symbol: row.symbol,
+          startWeight: weight,
+          returnRate: returnRate,
+          contribution: contribution,
+          allocationEffect: allocationEffect,
+          selectionEffect: selectionEffect,
+          interactionEffect: interactionEffect,
+          isResidual: row.isResidual,
+        ),
+      );
+    }
+
+    entries.sort((a, b) => b.contribution.compareTo(a.contribution));
+
+    final totalReturn = (portfolioEnd - portfolioStart) / portfolioStart;
+
+    return PortfolioAttribution(
+      entries: entries,
+      totalReturn: totalReturn,
+      totalAllocationEffect: totalAllocation,
+      totalSelectionEffect: totalSelection,
+      totalInteractionEffect: totalInteraction,
+    );
+  }
+
+  Future<Map<String, double>> _loadAggregatedQuantities(
+    PortfolioAnalyticsTarget target,
+  ) async {
     final holdings = target.type == PortfolioAnalyticsTargetType.total
         ? await holdingRepository.getHoldings()
         : await holdingRepository.getHoldingsByPortfolio(target.id!);
+
     if (holdings.isEmpty) {
-      return const _RiskMatrices.empty();
+      return const {};
     }
 
     final aggregated = <String, double>{};
     for (final holding in holdings) {
-      if (holding.quantity == 0 || holding.symbol.trim().isEmpty) {
+      final symbol = holding.symbol.trim().toUpperCase();
+      if (symbol.isEmpty || holding.quantity == 0) {
         continue;
       }
       aggregated.update(
-        holding.symbol.trim().toUpperCase(),
-        (value) => value + holding.quantity.abs(),
-        ifAbsent: () => holding.quantity.abs(),
+        symbol,
+        (value) => value + holding.quantity,
+        ifAbsent: () => holding.quantity,
       );
     }
-    if (aggregated.isEmpty) {
-      return const _RiskMatrices.empty();
-    }
 
-    final sortedSymbols = aggregated.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final symbols = sortedSymbols
-        .take(6)
-        .map((entry) => entry.key)
-        .toList(growable: false);
+    return aggregated;
+  }
 
-    final startDate = netWorthSeries.first.date.subtract(
-      const Duration(days: 5),
-    );
-    final endDate = netWorthSeries.last.date;
+  Future<Map<String, _SymbolData>> _loadSymbolData({
+    required Iterable<String> symbols,
+    required DateTime rangeStart,
+    required DateTime rangeEnd,
+  }) async {
+    final result = <String, _SymbolData>{};
+    final normalizedStart = rangeStart.subtract(const Duration(days: 10));
+    final normalizedEnd = rangeEnd.add(const Duration(days: 3));
 
-    final symbolReturnMap = <String, Map<DateTime, double>>{};
-    for (final symbol in symbols) {
+    for (final rawSymbol in symbols) {
+      final symbol = rawSymbol.trim().toUpperCase();
+      if (symbol.isEmpty) {
+        continue;
+      }
       try {
         final history = await marketDataService.getHistoricalData(
           symbol: symbol,
-          startDate: _formatDate(startDate),
-          endDate: _formatDate(endDate),
+          startDate: _formatDate(normalizedStart),
+          endDate: _formatDate(normalizedEnd),
         );
-        if (history.length < 20) {
+        if (history.length < 5) {
           continue;
         }
         history.sort((a, b) => a.date.compareTo(b.date));
         final priceMap = <DateTime, double>{};
         for (final item in history) {
-          final normalized = _normalizeDate(item.date);
-          priceMap[normalized] = item.close;
+          priceMap[_normalizeDate(item.date)] = item.close;
         }
-        final returns = _computeLogReturns(priceMap);
-        if (returns.length < 20) {
+        if (priceMap.isEmpty) {
           continue;
         }
-        symbolReturnMap[symbol] = {
-          for (final point in returns) point.date: point.value,
-        };
+        final returns = _computeLogReturns(priceMap);
+        if (returns.length < 5) {
+          continue;
+        }
+        final latestPrice = priceMap[priceMap.keys.last] ?? history.last.close;
+        result[symbol] = _SymbolData(
+          symbol: symbol,
+          priceByDate: priceMap,
+          returns: returns,
+          latestPrice: latestPrice,
+        );
       } catch (_) {
-        // 忽略单只标的的异常
+        // ignore symbol errors, continue building other entries
       }
+    }
+
+    return result;
+  }
+
+  _RiskMatrices _buildRiskMatrices({
+    required NetWorthRange range,
+    required List<NetWorthDataPoint> netWorthSeries,
+    required PortfolioAnalyticsTarget target,
+    required Map<String, double> quantityBySymbol,
+    required Map<String, _SymbolData> symbolData,
+    required double portfolioValue,
+    required double portfolioVaRLevel,
+  }) {
+    if (target.type == PortfolioAnalyticsTargetType.portfolio &&
+        target.id == null) {
+      return const _RiskMatrices.empty();
+    }
+    if (quantityBySymbol.isEmpty || symbolData.isEmpty) {
+      return const _RiskMatrices.empty();
+    }
+
+    final sortedSymbols = quantityBySymbol.entries
+        .where((entry) => entry.value != 0 && symbolData.containsKey(entry.key))
+        .toList()
+      ..sort((a, b) => b.value.abs().compareTo(a.value.abs()));
+    final symbols = sortedSymbols
+        .take(6)
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    if (symbols.length < 2) {
+      return const _RiskMatrices.empty();
+    }
+
+    final symbolReturnMap = <String, Map<DateTime, double>>{};
+    for (final symbol in symbols) {
+      final data = symbolData[symbol];
+      if (data == null) {
+        continue;
+      }
+      if (data.returns.length < 20) {
+        continue;
+      }
+      symbolReturnMap[symbol] = {
+        for (final point in data.returns) point.date: point.value,
+      };
     }
 
     if (symbolReturnMap.length < 2) {
@@ -496,7 +714,8 @@ class PortfolioAnalyticsService {
       if (commonDates == null) {
         commonDates = dateSet;
       } else {
-        commonDates = commonDates.intersection(dateSet);
+        final Set<DateTime> current = commonDates;
+        commonDates = current.intersection(dateSet);
       }
     }
 
@@ -505,12 +724,12 @@ class PortfolioAnalyticsService {
     }
 
     final orderedDates = commonDates.toList()..sort((a, b) => a.compareTo(b));
-
     final matrix = <List<double>>[];
     for (final date in orderedDates) {
       final row = <double>[];
       for (final symbol in symbols) {
-        row.add(symbolReturnMap[symbol]![date]!);
+        final value = symbolReturnMap[symbol]![date];
+        row.add(value ?? 0.0);
       }
       matrix.add(row);
     }
@@ -564,17 +783,30 @@ class PortfolioAnalyticsService {
       pairSeries = _buildPairSeries(symbols, orderedDates, dccResult.matrices);
     }
 
+    final riskContributions = covariance == null
+        ? const <RiskContribution>[]
+        : _computeRiskContributions(
+            symbols: symbols,
+            quantities: quantityBySymbol,
+            symbolData: symbolData,
+            covariance: covariance,
+            portfolioValue: portfolioValue,
+            portfolioVaRLevel: portfolioVaRLevel,
+          );
+
     return _RiskMatrices(
       covarianceMatrix: covarianceStats,
       correlationMatrix: correlationStats,
       dccMatrix: dccStats,
       dccPairSeries: pairSeries,
+      riskContributions: riskContributions,
     );
   }
 
   List<AnalyticsInsight> _generateInsights(
     List<AnalyticsMetric> metrics,
     _RiskMatrices matrices,
+    PortfolioAttribution? attribution,
   ) {
     if (metrics.isEmpty) {
       return const [];
@@ -674,6 +906,55 @@ class PortfolioAnalyticsService {
       );
     }
 
+    if (attribution != null && attribution.entries.isNotEmpty) {
+      final contributions = attribution.entries
+          .where((entry) => !entry.isResidual)
+          .toList()
+        ..sort((a, b) => b.contribution.compareTo(a.contribution));
+      if (contributions.isNotEmpty) {
+        final best = contributions.first;
+        if (best.contribution > 0.002) {
+          insights.add(
+            AnalyticsInsight(
+              title: '主要收益来源',
+              detail:
+                  '${best.symbol} 对区间收益贡献 ${(best.contribution * 100).toStringAsFixed(1)}%，注意保持优势配置。',
+              severity: InsightSeverity.positive,
+            ),
+          );
+        }
+        final worst = contributions.last;
+        if (worst.contribution < -0.002) {
+          insights.add(
+            AnalyticsInsight(
+              title: '拖累项需关注',
+              detail:
+                  '${worst.symbol} 对收益形成 ${(worst.contribution * 100).abs().toStringAsFixed(1)}% 拖累，可审视仓位与策略。',
+              severity: InsightSeverity.negative,
+            ),
+          );
+        }
+      }
+    }
+
+    final riskContributions = matrices.riskContributions
+        .where((entry) => !entry.isResidual)
+        .toList()
+      ..sort((a, b) => b.varShare.compareTo(a.varShare));
+    if (riskContributions.isNotEmpty) {
+      final dominant = riskContributions.first;
+      if (dominant.varShare > 0.35) {
+        insights.add(
+          AnalyticsInsight(
+            title: '风险集中度偏高',
+            detail:
+                '${dominant.symbol} 占组合 VaR ${(dominant.varShare * 100).toStringAsFixed(1)}%，建议分散或设定限额。',
+            severity: InsightSeverity.negative,
+          ),
+        );
+      }
+    }
+
     return insights;
   }
 }
@@ -684,18 +965,21 @@ class _RiskMatrices {
     required this.correlationMatrix,
     required this.dccMatrix,
     required this.dccPairSeries,
+    required this.riskContributions,
   });
 
   const _RiskMatrices.empty()
     : covarianceMatrix = null,
       correlationMatrix = null,
       dccMatrix = null,
-      dccPairSeries = const [];
+      dccPairSeries = const [],
+      riskContributions = const [];
 
   final MatrixStats? covarianceMatrix;
   final MatrixStats? correlationMatrix;
   final MatrixStats? dccMatrix;
   final List<PairCorrelationSeries> dccPairSeries;
+  final List<RiskContribution> riskContributions;
 }
 
 List<TimeSeriesPoint> _computeLogReturns(Map<DateTime, double> priceMap) {
@@ -820,6 +1104,131 @@ _DccComputationResult? _computeDcc(
   return _DccComputationResult(dates: dates, matrices: matrices);
 }
 
+List<RiskContribution> _computeRiskContributions({
+  required List<String> symbols,
+  required Map<String, double> quantities,
+  required Map<String, _SymbolData> symbolData,
+  required List<List<double>> covariance,
+  required double portfolioValue,
+  required double portfolioVaRLevel,
+}) {
+  if (covariance.isEmpty || covariance.first.isEmpty) {
+    return const [];
+  }
+  final n = symbols.length;
+  if (n == 0) {
+    return const [];
+  }
+
+  final positionValues = <double>[];
+  double totalValue = 0;
+  for (final symbol in symbols) {
+    final quantity = quantities[symbol] ?? 0;
+    final latestPrice = symbolData[symbol]?.latestPrice ?? 0;
+    final value = quantity * latestPrice;
+    positionValues.add(value);
+    totalValue += value;
+  }
+  if (totalValue.abs() < 1e-6) {
+    return const [];
+  }
+
+  final weights = [for (final value in positionValues) value / totalValue];
+
+  final gradient = List<double>.filled(n, 0);
+  for (var i = 0; i < n; i++) {
+    double sum = 0;
+    for (var j = 0; j < n; j++) {
+      sum += covariance[i][j] * weights[j];
+    }
+    gradient[i] = sum;
+  }
+
+  double portfolioVariance = 0;
+  for (var i = 0; i < n; i++) {
+    portfolioVariance += weights[i] * gradient[i];
+  }
+  if (portfolioVariance <= 0) {
+    return const [];
+  }
+
+  final portfolioStd = math.sqrt(portfolioVariance);
+  const z = 1.65;
+  final portfolioVaRReturn = portfolioVaRLevel > 0
+      ? portfolioVaRLevel.abs()
+      : (z * portfolioStd).abs();
+  final portfolioVaRValue = portfolioValue.abs() * portfolioVaRReturn;
+
+  final contributions = <RiskContribution>[];
+  double shareSum = 0.0;
+  for (var i = 0; i < n; i++) {
+    final weight = weights[i];
+    final value = positionValues[i];
+    final marginalVolatility = portfolioStd == 0 ? 0.0 : gradient[i] / portfolioStd;
+    final componentVolatility = portfolioStd == 0 ? 0.0 : weight * gradient[i] / portfolioStd;
+    final marginalVaRReturn = portfolioStd == 0 ? 0.0 : z * gradient[i] / portfolioStd;
+    final componentVaRValue = portfolioVaRValue == 0
+        ? 0.0
+        : (weight * marginalVaRReturn).abs() * portfolioValue.abs();
+    final varShare = portfolioVaRValue == 0 ? 0.0 : componentVaRValue / portfolioVaRValue;
+    shareSum += varShare;
+
+    contributions.add(
+      RiskContribution(
+        symbol: symbols[i],
+        weight: weight,
+        weightValue: value,
+        marginalVolatility: marginalVolatility.toDouble(),
+        componentVolatility: componentVolatility.toDouble(),
+        componentVaR: componentVaRValue.toDouble(),
+        varShare: varShare.toDouble(),
+      ),
+    );
+  }
+
+  contributions.sort((a, b) => b.componentVaR.compareTo(a.componentVaR));
+
+  final residualWeightValue = portfolioValue - totalValue;
+  if (residualWeightValue.abs() > portfolioValue.abs() * 0.01) {
+    contributions.add(
+      RiskContribution(
+        symbol: '未归类风险',
+        weight: 0,
+        weightValue: residualWeightValue,
+        marginalVolatility: 0,
+        componentVolatility: 0,
+        componentVaR: math.max(0.0, (1 - shareSum) * portfolioVaRValue).toDouble(),
+        varShare: math.max(0.0, 1 - shareSum).toDouble(),
+        isResidual: true,
+      ),
+    );
+  }
+
+  return contributions;
+}
+
+double? _priceOnOrBefore(Map<DateTime, double> priceMap, DateTime target) {
+  if (priceMap.isEmpty) {
+    return null;
+  }
+  DateTime? best; double? bestPrice;
+  for (final entry in priceMap.entries) {
+    final date = entry.key;
+    if (date.isAfter(target)) {
+      continue;
+    }
+    if (best == null || date.isAfter(best)) {
+      best = date;
+      bestPrice = entry.value;
+    }
+  }
+  if (bestPrice != null) {
+    return bestPrice;
+  }
+  final orderedDates = priceMap.keys.toList()..sort((a, b) => a.compareTo(b));
+  return orderedDates.isEmpty ? null : priceMap[orderedDates.first];
+}
+
 List<List<double>>? _covarianceMatrix(List<List<double>> matrix) {
   final t = matrix.length;
   final n = matrix.first.length;
@@ -929,6 +1338,34 @@ class _DccComputationResult {
 
   final List<DateTime> dates;
   final List<List<List<double>>> matrices;
+}
+
+class _SymbolData {
+  const _SymbolData({
+    required this.symbol,
+    required this.priceByDate,
+    required this.returns,
+    required this.latestPrice,
+  });
+
+  final String symbol;
+  final Map<DateTime, double> priceByDate;
+  final List<TimeSeriesPoint> returns;
+  final double latestPrice;
+}
+
+class _AttributionRow {
+  const _AttributionRow({
+    required this.symbol,
+    required this.startValue,
+    required this.endValue,
+    required this.isResidual,
+  });
+
+  final String symbol;
+  final double startValue;
+  final double endValue;
+  final bool isResidual;
 }
 
 // --- 统计工具函数 ---

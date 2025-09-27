@@ -5,6 +5,7 @@ import '../../../providers/repository_providers.dart';
 import '../../../providers/market_data_service_provider.dart';
 import '../../../providers/net_worth_range_state.dart';
 import '../../../services/analytics_service.dart';
+import '../../../services/forecast_projection_service.dart';
 import '../../accounts/providers/account_summary_providers.dart';
 import '../../ledger/views/ledger_tab_view.dart';
 import '../models/analytics_models.dart';
@@ -16,7 +17,12 @@ final portfolioAnalyticsServiceProvider = Provider<PortfolioAnalyticsService>((r
     portfolioRepository: ref.watch(portfolioRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
     marketDataService: ref.watch(marketDataServiceProvider),
+    forecastProjectionService: ref.watch(_forecastProjectionServiceProvider),
   );
+});
+
+final _forecastProjectionServiceProvider = Provider<ForecastProjectionService>((ref) {
+  return const ForecastProjectionService();
 });
 
 final selectedAnalyticsTargetProvider = StateProvider<PortfolioAnalyticsTarget>((ref) {

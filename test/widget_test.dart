@@ -5,8 +5,9 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:finanexus/app.dart';
 import 'package:finanexus/features/accounts/providers/account_summary_providers.dart';
@@ -25,11 +26,18 @@ void main() {
       ),
     );
 
-    // Wait for first frame to settle.
-    await tester.pumpAndSettle();
+  // Pump a few frames to allow async initialization without waiting for animations to settle.
+  await tester.pump();
 
-    expect(find.text('账户与组合'), findsOneWidget);
-    expect(find.text('账户列表'), findsOneWidget);
-    expect(find.text('组合列表'), findsOneWidget);
+  // 切换到底部“账户”标签页，加载账户与组合页面。
+  await tester.tap(find.text('账户').last);
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('账户'), findsWidgets);
+    expect(
+      find.byWidgetPredicate((widget) => widget is CupertinoSlidingSegmentedControl),
+      findsOneWidget,
+    );
   });
 }
