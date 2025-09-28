@@ -363,6 +363,7 @@ class PortfolioAnalyticsService {
     final endValue = series.last.value;
     final dayCount = series.last.date.difference(series.first.date).inDays;
     final years = dayCount <= 0 ? 1 / 365 : dayCount / 365.0;
+    final monthlyReturn = _trailingReturn(series, days: 30);
     double cagr;
     if (startValue <= 0 || years <= 0) {
       cagr = 0.0;
@@ -394,6 +395,12 @@ class PortfolioAnalyticsService {
         change: meanDaily * tradingDays,
         changeFormat: MetricFormat.percent,
         hint: '最近 ${returns.length} 个有效交易日均值年化',
+      ),
+      AnalyticsMetric(
+        label: '近月收益率',
+        value: monthlyReturn,
+        format: MetricFormat.percent,
+        hint: '最近 30 天的累积收益率',
       ),
       AnalyticsMetric(
         label: '年化波动率',
@@ -1154,9 +1161,7 @@ List<RiskContribution> _computeRiskContributions({
 
   final portfolioStd = math.sqrt(portfolioVariance);
   const z = 1.65;
-  final portfolioVaRReturn = portfolioVaRLevel > 0
-      ? portfolioVaRLevel.abs()
-      : (z * portfolioStd).abs();
+  final portfolioVaRReturn = (z * portfolioStd).abs();
   final portfolioVaRValue = portfolioValue.abs() * portfolioVaRReturn;
 
   final contributions = <RiskContribution>[];
@@ -1166,10 +1171,8 @@ List<RiskContribution> _computeRiskContributions({
     final value = positionValues[i];
     final marginalVolatility = portfolioStd == 0 ? 0.0 : gradient[i] / portfolioStd;
     final componentVolatility = portfolioStd == 0 ? 0.0 : weight * gradient[i] / portfolioStd;
-    final marginalVaRReturn = portfolioStd == 0 ? 0.0 : z * gradient[i] / portfolioStd;
-    final componentVaRValue = portfolioVaRValue == 0
-        ? 0.0
-        : (weight * marginalVaRReturn).abs() * portfolioValue.abs();
+  final marginalVaRReturn = portfolioStd == 0 ? 0.0 : z * gradient[i] / portfolioStd;
+  final componentVaRValue = weight * marginalVaRReturn * portfolioValue.abs();
     final varShare = portfolioVaRValue == 0 ? 0.0 : componentVaRValue / portfolioVaRValue;
     shareSum += varShare;
 
@@ -1409,6 +1412,41 @@ double _maxDrawdown(List<NetWorthDataPoint> series) {
     }
   }
   return maxDd;
+}
+
+double _trailingReturn(
+  List<NetWorthDataPoint> series, {
+  required int days,
+}) {
+  if (series.length < 2) {
+    return 0;
+  }
+  final endPoint = series.last;
+  final baselineDate = endPoint.date.subtract(Duration(days: days));
+  final baseline = _seriesPointOnOrBefore(series, baselineDate) ?? series.first;
+  if (baseline.value <= 0) {
+    return 0;
+  }
+  final result = (endPoint.value - baseline.value) / baseline.value;
+  if (result.isNaN || result.isInfinite) {
+    return 0;
+  }
+  return result;
+}
+
+NetWorthDataPoint? _seriesPointOnOrBefore(
+  List<NetWorthDataPoint> series,
+  DateTime target,
+) {
+  NetWorthDataPoint? candidate;
+  for (var i = series.length - 1; i >= 0; i--) {
+    final point = series[i];
+    if (!point.date.isAfter(target)) {
+      candidate = point;
+      break;
+    }
+  }
+  return candidate;
 }
 
 double _valueAtRisk(List<double> returns, double confidence) {

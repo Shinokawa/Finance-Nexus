@@ -13,12 +13,98 @@ import '../../portfolios/views/holding_form_page.dart';
 import '../../portfolios/views/holding_selection_page.dart';
 import '../../portfolios/views/trade_form_page.dart';
 import '../models/account_summary.dart';
+import '../models/operation_statistics.dart';
 import '../providers/account_summary_providers.dart';
 
 // Provider for account transactions
-final accountTransactionsProvider = FutureProvider.family<List<Transaction>, String>((ref, accountId) {
+final accountTransactionsProvider = FutureProvider.family<List<Transaction>, String>((ref, accountId) async {
   final repository = ref.watch(transactionRepositoryProvider);
-  return repository.getTransactionsByAccount(accountId);
+  final transactions = await repository.getTransactionsByAccount(accountId);
+  final sorted = [...transactions]..sort((a, b) => b.date.compareTo(a.date));
+  return sorted;
+});
+
+final accountOperationStatsProvider = FutureProvider.family<OperationStatistics, String>((ref, accountId) async {
+  final repository = ref.watch(transactionRepositoryProvider);
+  final transactions = await repository.getTransactionsByAccount(accountId);
+  if (transactions.isEmpty) {
+    return OperationStatistics.empty;
+  }
+
+  final tradeTransactions = transactions
+      .where((transaction) => transaction.type == TransactionType.buy || transaction.type == TransactionType.sell)
+      .toList();
+  if (tradeTransactions.isEmpty) {
+    return OperationStatistics.empty;
+  }
+
+  tradeTransactions.sort((a, b) => a.date.compareTo(b.date));
+
+  final groupedByHolding = <String, List<Transaction>>{};
+  for (final transaction in tradeTransactions) {
+    final holdingId = transaction.relatedHoldingId;
+    if (holdingId == null) {
+      continue;
+    }
+    groupedByHolding.putIfAbsent(holdingId, () => []).add(transaction);
+  }
+
+  if (groupedByHolding.isEmpty) {
+    return OperationStatistics(
+      tradedSymbols: 0,
+      tradeCount: tradeTransactions.length,
+      completedCycles: 0,
+      totalTradeAmount: tradeTransactions.fold<double>(0, (sum, txn) => sum + txn.amount.abs()),
+    );
+  }
+
+  var completedCycles = 0;
+  var winningCycles = 0;
+  var losingCycles = 0;
+  double totalHoldingDays = 0;
+
+  for (final entry in groupedByHolding.entries) {
+    final transactionsForHolding = entry.value;
+    final buys = transactionsForHolding.where((txn) => txn.type == TransactionType.buy).toList();
+    final sells = transactionsForHolding.where((txn) => txn.type == TransactionType.sell).toList();
+
+    if (buys.isEmpty || sells.isEmpty) {
+      continue;
+    }
+
+    buys.sort((a, b) => a.date.compareTo(b.date));
+    sells.sort((a, b) => a.date.compareTo(b.date));
+
+    completedCycles += 1;
+
+    final firstBuyDate = buys.first.date;
+    final lastSellDate = sells.last.date;
+    final holdingDuration = lastSellDate.difference(firstBuyDate).inDays;
+    totalHoldingDays += holdingDuration <= 0 ? 1 : holdingDuration.toDouble();
+
+    final totalBuyAmount = buys.fold<double>(0, (sum, txn) => sum + txn.amount);
+    final totalSellAmount = sells.fold<double>(0, (sum, txn) => sum + txn.amount);
+    final pnl = totalSellAmount - totalBuyAmount;
+    if (pnl > 1e-2) {
+      winningCycles += 1;
+    } else if (pnl < -1e-2) {
+      losingCycles += 1;
+    }
+  }
+
+  final winBase = winningCycles + losingCycles;
+  final averageHoldingDays = completedCycles > 0 ? totalHoldingDays / completedCycles : null;
+  final winRate = winBase > 0 ? winningCycles / winBase : null;
+  final totalTradeAmount = tradeTransactions.fold<double>(0, (sum, txn) => sum + txn.amount.abs());
+
+  return OperationStatistics(
+    tradedSymbols: groupedByHolding.length,
+    tradeCount: tradeTransactions.length,
+    completedCycles: completedCycles,
+    totalTradeAmount: totalTradeAmount,
+    averageHoldingDays: averageHoldingDays,
+    winRate: winRate,
+  );
 });
 
 class AccountDetailPage extends ConsumerStatefulWidget {
@@ -35,6 +121,7 @@ class AccountDetailPage extends ConsumerStatefulWidget {
 
 class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
   int _selectedTab = 0; // 0: 概览, 1: 持仓(投资账户), 2: 交易记录
+  int _operationSegment = 0; // 0: 操作统计, 1: 账户表现（预留）
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +207,8 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
         _buildAccountSummaryCard(),
         const SizedBox(height: 16),
         _buildQuickActionsCard(),
+        const SizedBox(height: 16),
+        _buildOperationAnalysisCard(),
         const SizedBox(height: 16),
         _buildRecentTransactionsCard(),
       ],
@@ -449,6 +538,147 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
               final action = actions[index];
               return _QuickActionButton(action: action);
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOperationAnalysisCard() {
+    final account = widget.accountSummary.account;
+    if (account.type != AccountType.investment) {
+      return const SizedBox.shrink();
+    }
+
+    final cardColor = CupertinoDynamicColor.resolve(QHColors.cardBackground, context);
+    final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
+    final secondaryColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
+
+    final statsAsync = ref.watch(accountOperationStatsProvider(account.id));
+    final summary = widget.accountSummary;
+    final totalAssets = summary.holdingsValue + account.balance;
+    final hasAssets = totalAssets.abs() >= 1e-6;
+    final averagePosition = hasAssets
+        ? (summary.holdingsValue / totalAssets).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '操作分析',
+                  style: QHTypography.title3.copyWith(
+                    color: labelColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              CupertinoSlidingSegmentedControl<int>(
+                groupValue: _operationSegment,
+                children: const {
+                  0: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Text('操作统计'),
+                  ),
+                  1: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Text('账户表现'),
+                  ),
+                },
+                onValueChanged: (value) {
+                  if (value != null && value != _operationSegment) {
+                    setState(() => _operationSegment = value);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          statsAsync.when(
+            data: (stats) {
+              final turnoverRate = hasAssets
+                  ? (stats.totalTradeAmount / totalAssets).clamp(0.0, 5.0)
+                  : 0.0;
+              final averageHoldingDays = stats.averageHoldingDays;
+              final winRate = stats.winRate;
+
+              if (_operationSegment == 1) {
+                return _OperationPlaceholder(secondaryColor: secondaryColor);
+              }
+
+              final metrics = [
+                _OperationMetric(
+                  label: '交易股票数',
+                  value: stats.tradedSymbols.toString(),
+                ),
+                _OperationMetric(
+                  label: '平均持仓天数',
+                  value: averageHoldingDays == null
+                      ? '--'
+                      : averageHoldingDays.toStringAsFixed(1),
+                ),
+                _OperationMetric(
+                  label: '建清仓次数',
+                  value: stats.completedCycles.toString(),
+                ),
+                _OperationMetric(
+                  label: '交易成功率',
+                  value: winRate == null
+                      ? '--'
+                      : '${(winRate * 100).clamp(0, 100).toStringAsFixed(2)}%',
+                ),
+                _OperationMetric(
+                  label: '平均仓位',
+                  value: '${(averagePosition * 100).toStringAsFixed(2)}%',
+                ),
+                _OperationMetric(
+                  label: '资金周转率',
+                  value: '${(turnoverRate * 100).toStringAsFixed(2)}%',
+                ),
+              ];
+
+              return Column(
+                children: [
+                  for (var i = 0; i < metrics.length; i += 2) ...[
+                    Row(
+                      children: [
+                        Expanded(child: _OperationMetricTile(metric: metrics[i])),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: i + 1 < metrics.length
+                              ? _OperationMetricTile(metric: metrics[i + 1])
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                    if (i + 2 < metrics.length) const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            },
+            loading: () => const Center(child: CupertinoActivityIndicator()),
+            error: (error, stack) => Center(
+              child: Text(
+                '操作数据暂不可用',
+                style: QHTypography.subheadline.copyWith(color: secondaryColor),
+              ),
+            ),
           ),
         ],
       ),
@@ -815,6 +1045,94 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
               }
             },
             child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OperationMetric {
+  const _OperationMetric({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+}
+
+class _OperationMetricTile extends StatelessWidget {
+  const _OperationMetricTile({
+    required this.metric,
+  });
+
+  final _OperationMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final tileColor = CupertinoDynamicColor.resolve(QHColors.surface, context);
+    final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
+    final valueColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: tileColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            metric.label,
+            style: QHTypography.footnote.copyWith(color: labelColor),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            metric.value,
+            style: QHTypography.title3.copyWith(
+              fontSize: 18,
+              color: valueColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OperationPlaceholder extends StatelessWidget {
+  const _OperationPlaceholder({
+    required this.secondaryColor,
+  });
+
+  final Color secondaryColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
+      decoration: BoxDecoration(
+        color: CupertinoDynamicColor.resolve(QHColors.surface, context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            CupertinoIcons.chart_bar_fill,
+            color: CupertinoDynamicColor.resolve(CupertinoColors.activeBlue, context),
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '账户表现分析即将上线，敬请期待。',
+              style: QHTypography.subheadline.copyWith(color: secondaryColor),
+            ),
           ),
         ],
       ),
