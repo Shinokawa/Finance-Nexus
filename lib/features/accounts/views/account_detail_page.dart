@@ -244,10 +244,15 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           for (final position in snapshot?.positions ?? const <HoldingPosition>[])
             position.holding.id: position,
         };
-        
+
+        final aggregatedGroups = _aggregateAccountHoldings(
+          holdings,
+          positionsByHoldingId,
+        );
+
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: holdings.length + 1,
+          itemCount: aggregatedGroups.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
               return Padding(
@@ -255,16 +260,15 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                 child: _buildAddHoldingCard(),
               );
             }
-            
-            final holding = holdings[index - 1];
+
+            final group = aggregatedGroups[index - 1];
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _HoldingCard(
-                holding: holding,
-                position: positionsByHoldingId[holding.id],
-                onTrade: () => _showTradeForm(holding),
-                onEdit: () => _showEditHolding(holding),
-                onDelete: () => _showDeleteHolding(holding),
+              child: _AggregatedHoldingCard(
+                group: group,
+                onTrade: (holding) => _showTradeForm(holding),
+                onEdit: (holding) => _showEditHolding(holding),
+                onDelete: (holding) => _showDeleteHolding(holding),
               ),
             );
           },
@@ -273,6 +277,34 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
       loading: () => const Center(child: CupertinoActivityIndicator()),
       error: (error, stack) => _ErrorView(message: error.toString()),
     );
+  }
+
+  List<_AggregatedHoldingGroup> _aggregateAccountHoldings(
+    List<Holding> holdings,
+    Map<String, HoldingPosition> positionsByHoldingId,
+  ) {
+    if (holdings.isEmpty) {
+      return const [];
+    }
+
+    final builders = <String, _AggregatedHoldingGroupBuilder>{};
+
+    for (final holding in holdings) {
+      final key = holding.symbol.trim().toUpperCase();
+      final position = positionsByHoldingId[holding.id];
+      final builder = builders.putIfAbsent(
+        key,
+        () => _AggregatedHoldingGroupBuilder(
+          symbol: key,
+          initialDisplayName: position?.displayName ?? key,
+        ),
+      );
+      builder.add(holding, position);
+    }
+
+    final groups = builders.values.map((builder) => builder.build()).toList();
+    groups.sort((a, b) => b.marketValue.compareTo(a.marketValue));
+    return groups;
   }
 
   Widget _buildTransactionHistory() {
@@ -1263,150 +1295,231 @@ class _QuickActionButton extends StatelessWidget {
   }
 }
 
-class _HoldingCard extends StatelessWidget {
-  const _HoldingCard({
-    required this.holding,
+class _AggregatedHoldingCard extends StatelessWidget {
+  const _AggregatedHoldingCard({
+    required this.group,
     required this.onTrade,
     required this.onEdit,
     required this.onDelete,
-    this.position,
   });
 
-  final Holding holding;
-  final HoldingPosition? position;
-  final VoidCallback onTrade;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final _AggregatedHoldingGroup group;
+  final void Function(Holding holding) onTrade;
+  final void Function(Holding holding) onEdit;
+  final void Function(Holding holding) onDelete;
 
   @override
   Widget build(BuildContext context) {
     final cardColor = CupertinoDynamicColor.resolve(QHColors.cardBackground, context);
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
     final secondaryColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
+    final dividerColor = CupertinoDynamicColor.resolve(CupertinoColors.separator, context);
+    final accentColor = CupertinoDynamicColor.resolve(CupertinoColors.activeBlue, context);
 
-    final latestPrice = position?.latestPrice;
-    final currentPrice = latestPrice ?? holding.averageCost;
-    final costBasis = position?.costBasis ?? holding.quantity * holding.averageCost;
-    final marketValue = position?.marketValue ?? holding.quantity * currentPrice;
-    final unrealizedProfit = position?.unrealizedProfit ?? (marketValue - costBasis);
-    final profitRate = costBasis > 0 ? (unrealizedProfit / costBasis) * 100 : null;
-    final profitRateText = profitRate != null ? '${profitRate.toStringAsFixed(2)}%' : '--';
-    final priceText = currentPrice > 0 ? '¥${currentPrice.toStringAsFixed(2)}' : '--';
-    final titleText = position?.displayName ?? holding.symbol;
+    final quantityText = group.totalQuantity == group.totalQuantity.roundToDouble()
+        ? group.totalQuantity.toStringAsFixed(0)
+        : group.totalQuantity.toStringAsFixed(2);
+    final averageCostText = group.averageCost > 0
+        ? '¥${group.averageCost.toStringAsFixed(2)}'
+        : '--';
+    final latestPriceText = group.latestPrice != null
+        ? '¥${group.latestPrice!.toStringAsFixed(2)}'
+        : '--';
+    final profitRateText = group.profitRate != null
+        ? '${group.profitRate!.toStringAsFixed(2)}%'
+        : '--';
+    final todayProfitText = _formatSignedCurrency(group.todayProfit);
+    final profitColor = _resolveChangeColor(group.unrealizedProfit);
+    final todayProfitColor = _resolveChangeColor(group.todayProfit);
 
-    return GestureDetector(
-      onTap: () => _showHoldingOptions(context),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: CupertinoColors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 第一行：股票代码和市值
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        titleText,
-                        style: QHTypography.subheadline.copyWith(
-                          color: labelColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (titleText.toUpperCase() != holding.symbol.toUpperCase())
-                        Text(
-                          holding.symbol.toUpperCase(),
-                          style: QHTypography.footnote.copyWith(
-                            color: secondaryColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _formatCurrency(marketValue),
+                      group.displayName,
                       style: QHTypography.subheadline.copyWith(
                         color: labelColor,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text(
-                      _formatSignedCurrency(unrealizedProfit),
-                      style: QHTypography.footnote.copyWith(
-                        color: _resolveChangeColor(unrealizedProfit),
+                    if (group.displayName.toUpperCase() != group.symbol.toUpperCase())
+                      Text(
+                        group.symbol,
+                        style: QHTypography.footnote.copyWith(
+                          color: secondaryColor,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatCurrency(group.marketValue),
+                    style: QHTypography.subheadline.copyWith(
+                      color: labelColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    _formatSignedCurrency(group.unrealizedProfit),
+                    style: QHTypography.footnote.copyWith(
+                      color: profitColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetric(
+                  label: '持仓总量',
+                  value: '$quantityText 股',
+                  captionColor: secondaryColor,
+                  valueColor: labelColor,
+                ),
+              ),
+              Expanded(
+                child: _buildMetric(
+                  label: '平均成本',
+                  value: averageCostText,
+                  captionColor: secondaryColor,
+                  valueColor: labelColor,
+                ),
+              ),
+              Expanded(
+                child: _buildMetric(
+                  label: '现价',
+                  value: latestPriceText,
+                  captionColor: secondaryColor,
+                  valueColor: labelColor,
+                ),
+              ),
+              Expanded(
+                child: _buildMetric(
+                  label: '盈亏率',
+                  value: profitRateText,
+                  captionColor: secondaryColor,
+                  valueColor: profitColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetric(
+                  label: '今日盈亏',
+                  value: todayProfitText,
+                  captionColor: secondaryColor,
+                  valueColor: todayProfitColor,
+                ),
+              ),
+              Expanded(
+                child: _buildMetric(
+                  label: '持仓数',
+                  value: '${group.entries.length} 项',
+                  captionColor: secondaryColor,
+                  valueColor: labelColor,
+                ),
+              ),
+              const Spacer(),
+            ],
+          ),
+          if (group.portfolioNames.isNotEmpty) ...[
             const SizedBox(height: 12),
-            
-            // 第二行：持仓信息
-            Row(
-              children: [
-                Expanded(
-                  child: _buildHoldingMetric(
-                    '持仓',
-                    '${holding.quantity.toStringAsFixed(0)} 股',
-                    secondaryColor,
-                  ),
-                ),
-                Expanded(
-                  child: _buildHoldingMetric(
-                    '成本价',
-                    '¥${holding.averageCost.toStringAsFixed(2)}',
-                    secondaryColor,
-                  ),
-                ),
-                Expanded(
-                  child: _buildHoldingMetric(
-                    '现价',
-                    priceText,
-                    secondaryColor,
-                  ),
-                ),
-                Expanded(
-                  child: _buildHoldingMetric(
-                    '盈亏率',
-                    profitRateText,
-                    _resolveChangeColor(unrealizedProfit),
-                  ),
-                ),
-              ],
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: group.portfolioNames
+                  .map(
+                    (name) => DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: accentColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        child: Text(
+                          name,
+                          style: QHTypography.footnote.copyWith(
+                            color: accentColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: CupertinoDynamicColor.resolve(CupertinoColors.systemGrey6, context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < group.entries.length; i++) ...[
+                  if (i != 0)
+                    Container(
+                      height: 1,
+                      color: dividerColor.withOpacity(0.18),
+                    ),
+                  _UnderlyingHoldingRow(
+                    entry: group.entries[i],
+                    onTrade: onTrade,
+                    onEdit: onEdit,
+                    onDelete: onDelete,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildHoldingMetric(String label, String value, Color valueColor) {
+  Widget _buildMetric({
+    required String label,
+    required String value,
+    required Color captionColor,
+    required Color valueColor,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: QHTypography.footnote.copyWith(
-            color: CupertinoColors.secondaryLabel,
-          ),
+          style: QHTypography.footnote.copyWith(color: captionColor),
         ),
         const SizedBox(height: 2),
         Text(
@@ -1419,41 +1532,235 @@ class _HoldingCard extends StatelessWidget {
       ],
     );
   }
+}
 
-  void _showHoldingOptions(BuildContext context) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(holding.symbol),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onTrade();
-            },
-            child: const Text('买入/卖出'),
+class _UnderlyingHoldingRow extends StatelessWidget {
+  const _UnderlyingHoldingRow({
+    required this.entry,
+    required this.onTrade,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final _UnderlyingHoldingInfo entry;
+  final void Function(Holding holding) onTrade;
+  final void Function(Holding holding) onEdit;
+  final void Function(Holding holding) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
+    final secondaryColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
+
+    final holding = entry.holding;
+    final position = entry.position;
+    final portfolioName = position?.portfolio.name ?? '未知组合';
+    final quantityText = '${holding.quantity.toStringAsFixed(0)} 股';
+    final costText = '成本 ¥${holding.averageCost.toStringAsFixed(2)}';
+    final marketValue = position?.marketValue ?? holding.quantity * holding.averageCost;
+    final marketText = '市值 ${_formatCurrency(marketValue)}';
+    final profit = position?.unrealizedProfit ?? (marketValue - holding.quantity * holding.averageCost);
+    final profitText = _formatSignedCurrency(profit);
+    final profitColor = _resolveChangeColor(profit);
+
+    final tradeColor = CupertinoDynamicColor.resolve(CupertinoColors.activeBlue, context);
+    final editColor = CupertinoDynamicColor.resolve(CupertinoColors.activeBlue, context);
+    final deleteColor = CupertinoDynamicColor.resolve(CupertinoColors.systemRed, context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  portfolioName,
+                  style: QHTypography.subheadline.copyWith(
+                    color: labelColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 4,
+                  children: [
+                    Text(quantityText, style: QHTypography.footnote.copyWith(color: secondaryColor)),
+                    Text(costText, style: QHTypography.footnote.copyWith(color: secondaryColor)),
+                    Text(marketText, style: QHTypography.footnote.copyWith(color: secondaryColor)),
+                    Text(
+                      profitText,
+                      style: QHTypography.footnote.copyWith(
+                        color: profitColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onEdit();
-            },
-            child: const Text('编辑持仓'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onDelete();
-            },
-            isDestructiveAction: true,
-            child: const Text('删除持仓'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minSize: 28,
+                onPressed: () => onTrade(holding),
+                child: Icon(
+                  CupertinoIcons.arrow_2_squarepath,
+                  size: 20,
+                  color: tradeColor,
+                ),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minSize: 28,
+                onPressed: () => onEdit(holding),
+                child: Icon(
+                  CupertinoIcons.pencil,
+                  size: 20,
+                  color: editColor,
+                ),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minSize: 28,
+                onPressed: () => onDelete(holding),
+                child: Icon(
+                  CupertinoIcons.delete,
+                  size: 20,
+                  color: deleteColor,
+                ),
+              ),
+            ],
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
       ),
+    );
+  }
+}
+
+class _AggregatedHoldingGroup {
+  const _AggregatedHoldingGroup({
+    required this.symbol,
+    required this.displayName,
+    required this.entries,
+    required this.totalQuantity,
+    required this.totalCost,
+    required this.marketValue,
+    required this.unrealizedProfit,
+    required this.todayProfit,
+    this.latestPrice,
+  });
+
+  final String symbol;
+  final String displayName;
+  final List<_UnderlyingHoldingInfo> entries;
+  final double totalQuantity;
+  final double totalCost;
+  final double marketValue;
+  final double unrealizedProfit;
+  final double todayProfit;
+  final double? latestPrice;
+
+  double get averageCost => totalQuantity <= 0 ? 0 : totalCost / totalQuantity;
+  double? get profitRate => totalCost <= 0 ? null : (unrealizedProfit / totalCost) * 100;
+  double? get todayProfitPercent {
+    final previousValue = marketValue - todayProfit;
+    if (previousValue <= 0) {
+      return null;
+    }
+    return (todayProfit / previousValue) * 100;
+  }
+
+  List<String> get portfolioNames {
+    final names = <String>{};
+    for (final entry in entries) {
+      final name = entry.position?.portfolio.name;
+      if (name != null && name.trim().isNotEmpty) {
+        names.add(name.trim());
+      }
+    }
+    final list = names.toList()..sort();
+    return list;
+  }
+}
+
+class _UnderlyingHoldingInfo {
+  const _UnderlyingHoldingInfo({
+    required this.holding,
+    required this.position,
+  });
+
+  final Holding holding;
+  final HoldingPosition? position;
+}
+
+class _AggregatedHoldingGroupBuilder {
+  _AggregatedHoldingGroupBuilder({
+    required this.symbol,
+    required String initialDisplayName,
+  })  : displayName = initialDisplayName,
+        _hasCustomDisplayName = initialDisplayName.trim().isNotEmpty &&
+            initialDisplayName.toUpperCase() != symbol.toUpperCase();
+
+  final String symbol;
+  String displayName;
+  final List<_UnderlyingHoldingInfo> entries = [];
+  double totalQuantity = 0;
+  double totalCost = 0;
+  double marketValue = 0;
+  double unrealizedProfit = 0;
+  double todayProfit = 0;
+  double? latestPrice;
+  bool _hasCustomDisplayName;
+
+  void add(Holding holding, HoldingPosition? position) {
+    final quantity = holding.quantity;
+    final cost = holding.averageCost * quantity;
+    totalQuantity += quantity;
+    totalCost += cost;
+
+    final computedMarketValue =
+        position?.marketValue ?? quantity * (position?.latestPrice ?? holding.averageCost);
+    marketValue += computedMarketValue;
+
+    final profit = position?.unrealizedProfit ?? (computedMarketValue - cost);
+    unrealizedProfit += profit;
+
+    todayProfit += position?.todayProfit ?? 0;
+
+    final candidatePrice = position?.latestPrice;
+    if (candidatePrice != null) {
+      latestPrice ??= candidatePrice;
+    }
+
+    final candidateName = position?.displayName;
+    if (!_hasCustomDisplayName &&
+        candidateName != null &&
+        candidateName.trim().isNotEmpty &&
+        candidateName.toUpperCase() != symbol.toUpperCase()) {
+      displayName = candidateName.trim();
+      _hasCustomDisplayName = true;
+    }
+
+    entries.add(_UnderlyingHoldingInfo(holding: holding, position: position));
+  }
+
+  _AggregatedHoldingGroup build() {
+    return _AggregatedHoldingGroup(
+      symbol: symbol,
+      displayName: displayName,
+      entries: List.unmodifiable(entries),
+      totalQuantity: totalQuantity,
+      totalCost: totalCost,
+      marketValue: marketValue,
+      unrealizedProfit: unrealizedProfit,
+      todayProfit: todayProfit,
+      latestPrice: latestPrice,
     );
   }
 }
