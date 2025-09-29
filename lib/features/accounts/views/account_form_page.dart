@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
+import '../../../data/repositories/account_repository.dart';
 import '../../../providers/repository_providers.dart';
 
 class AccountFormPage extends ConsumerStatefulWidget {
@@ -37,10 +38,12 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
       text: initialBalance == 0 ? '' : initialBalance.toStringAsFixed(2),
     );
     _commissionController = TextEditingController(
-      text: account?.commissionRate.toStringAsFixed(4) ?? '0.0003',
+      text: (account?.commissionRate ?? AccountRepository.defaultCommissionRate)
+          .toStringAsFixed(4),
     );
     _stampTaxController = TextEditingController(
-      text: account?.stampTaxRate.toStringAsFixed(4) ?? '0.0010',
+      text: (account?.stampTaxRate ?? AccountRepository.defaultStampTaxRate)
+          .toStringAsFixed(4),
     );
   }
 
@@ -61,8 +64,15 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
     final name = _nameController.text.trim();
     final rawBalance = _balanceController.text.trim();
     final balance = _requiresBalance ? double.tryParse(rawBalance) ?? 0.0 : 0.0;
-  final commissionRate = double.tryParse(_commissionController.text.trim());
-  final stampTaxRate = double.tryParse(_stampTaxController.text.trim());
+  final commissionRateRaw = double.tryParse(_commissionController.text.trim());
+  final stampTaxRateRaw = double.tryParse(_stampTaxController.text.trim());
+  final commissionRate = commissionRateRaw ?? AccountRepository.defaultCommissionRate;
+  final stampTaxRate = stampTaxRateRaw ?? AccountRepository.defaultStampTaxRate;
+
+  final normalizedCommissionRate = commissionRate < AccountRepository.minCommissionRate
+    ? AccountRepository.minCommissionRate
+    : commissionRate;
+  final normalizedStampTaxRate = stampTaxRate < 0 ? 0.0 : stampTaxRate;
     final repository = ref.read(accountRepositoryProvider);
 
     setState(() => _isSaving = true);
@@ -72,8 +82,8 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
           name: name,
           type: _selectedType,
           balance: balance,
-          commissionRate: commissionRate,
-          stampTaxRate: stampTaxRate,
+          commissionRate: normalizedCommissionRate,
+          stampTaxRate: normalizedStampTaxRate,
         );
       } else {
         await repository.updateAccount(
@@ -81,8 +91,8 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
           name: name,
           type: _selectedType,
           balance: _requiresBalance ? balance : widget.account!.balance,
-          commissionRate: commissionRate,
-          stampTaxRate: stampTaxRate,
+          commissionRate: normalizedCommissionRate,
+          stampTaxRate: normalizedStampTaxRate,
         );
       }
       if (mounted) {
@@ -210,8 +220,11 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (value) {
                         final number = double.tryParse((value ?? '').trim());
-                        if (number == null || number < 0) {
+                        if (number == null) {
                           return '请输入合法佣金率';
+                        }
+                        if (number < AccountRepository.minCommissionRate) {
+                          return '佣金率不能低于万0.1';
                         }
                         return null;
                       },
@@ -223,8 +236,11 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (value) {
                         final number = double.tryParse((value ?? '').trim());
-                        if (number == null || number < 0) {
+                        if (number == null) {
                           return '请输入合法税率';
+                        }
+                        if (number < 0) {
+                          return '税率不能为负';
                         }
                         return null;
                       },

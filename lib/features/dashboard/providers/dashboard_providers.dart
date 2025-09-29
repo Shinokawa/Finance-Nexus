@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
+import '../../../data/repositories/account_repository.dart';
 import '../../accounts/providers/account_summary_providers.dart';
 import '../../ledger/providers/transaction_providers.dart';
 import '../models/holding_position.dart';
@@ -179,8 +180,8 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
       continue;
     }
 
-    final amount = transaction.amount.abs();
-    final commission = amount * account.commissionRate;
+  final amount = transaction.amount.abs();
+  final commission = _calculateCommission(amount, account.commissionRate);
     final stampTax = transaction.type == TransactionType.sell ? amount * account.stampTaxRate : 0.0;
 
     final accountTrades = tradesByAccount.putIfAbsent(accountId, _TradeAggregation.new);
@@ -395,6 +396,14 @@ double _calculateRealizedProfit(_TradeAggregation? trades, double currentCost) {
   }
   final soldCost = math.max(0.0, trades.buyAmount - currentCost);
   return trades.sellAmount - soldCost;
+}
+
+double _calculateCommission(double amount, double rate) {
+  if (amount <= 0) {
+    return 0.0;
+  }
+  final effectiveRate = math.max(rate, AccountRepository.minCommissionRate);
+  return math.max(amount * effectiveRate, AccountRepository.minCommissionPerTrade);
 }
 
 class _TradeAggregation {

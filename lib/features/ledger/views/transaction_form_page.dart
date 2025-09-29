@@ -122,54 +122,41 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
     }
   }
 
-  void _showError(String message) {
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('操作失败'),
-        content: Text(message),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('好的'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.transaction != null;
     final accountsAsync = ref.watch(accountsStreamProvider);
-    
+
+    final backgroundColor = CupertinoDynamicColor.resolve(
+      CupertinoColors.systemGroupedBackground,
+      context,
+    );
+
     return CupertinoPageScaffold(
+      backgroundColor: backgroundColor,
       navigationBar: CupertinoNavigationBar(
-        middle: Text(isEditing ? '编辑交易' : '添加交易'),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _isSaving ? null : _handleSubmit,
-          child: _isSaving
-              ? const CupertinoActivityIndicator()
-              : const Text('保存'),
-        ),
+        middle: Text(isEditing ? '编辑交易' : '新增交易'),
+        trailing: _isSaving
+            ? const CupertinoActivityIndicator()
+            : CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _isSaving ? null : _handleSubmit,
+                child: Text(isEditing ? '保存' : '完成'),
+              ),
       ),
       child: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: accountsAsync.when(
-            data: (accounts) => _buildForm(accounts),
-            loading: () => const Center(child: CupertinoActivityIndicator()),
-            error: (error, stack) => Center(
-              child: Text(
-                '加载账户失败: $error',
-                style: const TextStyle(color: CupertinoColors.systemRed),
-              ),
+        bottom: false,
+        child: accountsAsync.when(
+          data: (accounts) => _buildFormContent(
+            context: context,
+            accounts: accounts,
+            isEditing: isEditing,
+          ),
+          loading: () => const Center(child: CupertinoActivityIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Text(
+              '加载账户失败',
+              style: _formValueStyle(context, placeholder: true),
             ),
           ),
         ),
@@ -177,191 +164,229 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
     );
   }
 
-  Widget _buildForm(List<Account> accounts) {
-    final isEditing = widget.transaction != null;
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      children: [
-        // 交易类型选择
-        CupertinoFormSection.insetGrouped(
-          header: const Text('交易类型'),
+  Widget _buildFormContent({
+    required BuildContext context,
+    required List<Account> accounts,
+    required bool isEditing,
+  }) {
+    return Form(
+      key: _formKey,
+      child: CupertinoScrollbar(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           children: [
-            CupertinoFormRow(
-              prefix: const Text('类型'),
-              child: CupertinoSlidingSegmentedControl<TransactionType>(
-                groupValue: _selectedType,
-                children: {
-                  for (final type in [
-                    TransactionType.expense,
-                    TransactionType.income,
-                    TransactionType.transfer,
-                  ])
-                    type: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Text(type.displayName),
-                    ),
-                },
-                onValueChanged: (value) {
-                  if (_isSaving || value == null) return;
-                  setState(() {
-                    _selectedType = value;
-                    // 清空账户选择
-                    _selectedFromAccountId = null;
-                    _selectedToAccountId = null;
-                  });
-                },
-              ),
-            ),
-          ],
-        ),
-        
-        const SizedBox(height: 24),
-        
-        // 基础信息
-        CupertinoFormSection.insetGrouped(
-          header: const Text('基础信息'),
-          children: [
-            CupertinoTextFormFieldRow(
-              controller: _amountController,
-              prefix: const Text('金额'),
-              placeholder: '¥0.00',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return '请输入金额';
-                }
-                final number = double.tryParse(value.trim());
-                if (number == null || number <= 0) {
-                  return '请输入有效金额';
-                }
-                return null;
-              },
-            ),
-            // 类别选择
-            GestureDetector(
-              onTap: _showCategorySelector,
-              child: CupertinoFormRow(
-                prefix: const Text('类别'),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _categoryController.text.trim().isEmpty
-                            ? _getCategoryPlaceholder()
-                            : _categoryController.text.trim(),
-                        style: TextStyle(
-                          color: _categoryController.text.trim().isEmpty
-                              ? CupertinoColors.placeholderText
-                              : CupertinoColors.label,
+            CupertinoFormSection.insetGrouped(
+              header: const Text('交易类型'),
+              children: [
+                CupertinoFormRow(
+                  prefix: Text('类型', style: _formLabelStyle(context)),
+                  child: CupertinoSlidingSegmentedControl<TransactionType>(
+                    groupValue: _selectedType,
+                    children: {
+                      for (final type in [
+                        TransactionType.expense,
+                        TransactionType.income,
+                        TransactionType.transfer,
+                      ])
+                        type: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Text(type.displayName),
                         ),
-                      ),
-                    ),
-                    const Icon(
-                      CupertinoIcons.right_chevron,
-                      color: CupertinoColors.systemGrey,
-                      size: 18,
-                    ),
-                  ],
+                    },
+                    onValueChanged: (value) {
+                      if (_isSaving || value == null) return;
+                      setState(() {
+                        _selectedType = value;
+                        _selectedFromAccountId = null;
+                        _selectedToAccountId = null;
+                      });
+                    },
+                  ),
                 ),
-              ),
+              ],
             ),
-            // 日期选择
-            GestureDetector(
-              onTap: _showDatePicker,
-              child: CupertinoFormRow(
-                prefix: const Text('日期'),
-                child: Text(
-                  _formatDate(_selectedDate),
-                  style: const TextStyle(color: CupertinoColors.label),
+
+            const SizedBox(height: 24),
+
+            CupertinoFormSection.insetGrouped(
+              header: const Text('基础信息'),
+              children: [
+                CupertinoTextFormFieldRow(
+                  controller: _amountController,
+                  prefix: Text('金额', style: _formLabelStyle(context)),
+                  placeholder: '¥0.00',
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return '请输入金额';
+                    }
+                    final number = double.tryParse(value.trim());
+                    if (number == null || number <= 0) {
+                      return '请输入有效金额';
+                    }
+                    return null;
+                  },
                 ),
+                GestureDetector(
+                  onTap: _showCategorySelector,
+                  behavior: HitTestBehavior.opaque,
+                  child: CupertinoFormRow(
+                    prefix: Text('类别', style: _formLabelStyle(context)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _categoryController.text.trim().isEmpty
+                                ? _getCategoryPlaceholder()
+                                : _categoryController.text.trim(),
+                            textAlign: TextAlign.right,
+                            style: _formValueStyle(
+                              context,
+                              placeholder:
+                                  _categoryController.text.trim().isEmpty,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          CupertinoIcons.chevron_forward,
+                          size: 16,
+                          color: CupertinoDynamicColor.resolve(
+                            CupertinoColors.systemGrey3,
+                            context,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _showDatePicker,
+                  behavior: HitTestBehavior.opaque,
+                  child: CupertinoFormRow(
+                    prefix: Text('日期', style: _formLabelStyle(context)),
+                    child: Text(
+                      _formatDate(_selectedDate),
+                      textAlign: TextAlign.right,
+                      style: _formValueStyle(context),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            if (_needsFromAccount || _needsToAccount)
+              CupertinoFormSection.insetGrouped(
+                header: const Text('账户选择'),
+                children: [
+                  if (_needsFromAccount)
+                    _buildAccountSelector(
+                      context: context,
+                      accounts: accounts,
+                      label: _getFromAccountLabel(),
+                      selectedAccountId: _selectedFromAccountId,
+                      onChanged: (accountId) =>
+                          setState(() => _selectedFromAccountId = accountId),
+                    ),
+                  if (_needsToAccount)
+                    _buildAccountSelector(
+                      context: context,
+                      accounts: accounts,
+                      label: _getToAccountLabel(),
+                      selectedAccountId: _selectedToAccountId,
+                      onChanged: (accountId) =>
+                          setState(() => _selectedToAccountId = accountId),
+                    ),
+                ],
+              ),
+
+            const SizedBox(height: 24),
+
+            CupertinoFormSection.insetGrouped(
+              header: const Text('详细信息'),
+              children: [
+                CupertinoTextFormFieldRow(
+                  controller: _notesController,
+                  prefix: Text('备注', style: _formLabelStyle(context)),
+                  placeholder: '记录这笔交易的详细信息（可选）',
+                  maxLines: 3,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: CupertinoButton.filled(
+                onPressed: _isSaving ? null : _handleSubmit,
+                child: Text(isEditing ? '保存修改' : '添加交易'),
               ),
             ),
           ],
         ),
-
-        const SizedBox(height: 24),
-
-        // 账户选择
-        if (_needsFromAccount || _needsToAccount)
-          CupertinoFormSection.insetGrouped(
-            header: const Text('账户选择'),
-            children: [
-              if (_needsFromAccount)
-                _buildAccountSelector(
-                  accounts: accounts,
-                  label: _getFromAccountLabel(),
-                  selectedAccountId: _selectedFromAccountId,
-                  onChanged: (accountId) => setState(() => _selectedFromAccountId = accountId),
-                ),
-              if (_needsToAccount)
-                _buildAccountSelector(
-                  accounts: accounts,
-                  label: _getToAccountLabel(),
-                  selectedAccountId: _selectedToAccountId,
-                  onChanged: (accountId) => setState(() => _selectedToAccountId = accountId),
-                ),
-            ],
-          ),
-
-        const SizedBox(height: 24),
-
-        // 备注
-        CupertinoFormSection.insetGrouped(
-          header: const Text('详细信息'),
-          children: [
-            CupertinoTextFormFieldRow(
-              controller: _notesController,
-              prefix: const Text('备注'),
-              placeholder: '记录这笔交易的详细信息（可选）',
-              maxLines: 3,
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 24),
-
-        // 提交按钮
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: CupertinoButton.filled(
-            onPressed: _isSaving ? null : _handleSubmit,
-            child: Text(isEditing ? '保存修改' : '添加交易'),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildAccountSelector({
+    required BuildContext context,
     required List<Account> accounts,
     required String label,
     required String? selectedAccountId,
     required ValueChanged<String?> onChanged,
   }) {
+    if (accounts.isEmpty) {
+      return CupertinoFormRow(
+        prefix: Text(label, style: _formLabelStyle(context)),
+        child: Text(
+          '暂无可用账户',
+          textAlign: TextAlign.right,
+          style: _formValueStyle(context, placeholder: true),
+        ),
+      );
+    }
+
     final selectedAccount = selectedAccountId != null
-        ? accounts.firstWhere((a) => a.id == selectedAccountId, orElse: () => accounts.first)
+        ? accounts.firstWhere(
+            (a) => a.id == selectedAccountId,
+            orElse: () => accounts.first,
+          )
         : null;
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _showAccountPicker(accounts, selectedAccountId, onChanged),
       child: CupertinoFormRow(
-        prefix: Text(label),
+        prefix: Text(label, style: _formLabelStyle(context)),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Expanded(
+            Flexible(
               child: Text(
                 selectedAccount?.name ?? '请选择账户',
-                style: TextStyle(
-                  color: selectedAccount != null 
-                      ? CupertinoColors.label 
-                      : CupertinoColors.placeholderText,
+                textAlign: TextAlign.right,
+                style: _formValueStyle(
+                  context,
+                  placeholder: selectedAccount == null,
                 ),
               ),
             ),
-            const Icon(
+            const SizedBox(width: 6),
+            Icon(
               CupertinoIcons.chevron_forward,
               size: 16,
-              color: CupertinoColors.systemGrey,
+              color: CupertinoDynamicColor.resolve(
+                CupertinoColors.systemGrey3,
+                context,
+              ),
             ),
           ],
         ),
@@ -370,44 +395,101 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
   }
 
   void _showAccountPicker(
-    List<Account> accounts, 
+    List<Account> accounts,
     String? currentSelection,
     ValueChanged<String?> onChanged,
   ) {
     showCupertinoModalPopup<String?>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: const Text('选择账户'),
-        actions: accounts.map((account) =>
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(context).pop(account.id);
-            },
-            isDefaultAction: currentSelection == account.id,
-            child: Row(
-              children: [
-                Expanded(child: Text(account.name)),
-                Text(
-                  account.type.displayName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: CupertinoColors.secondaryLabel,
+      builder: (popupContext) {
+        final secondary = CupertinoDynamicColor.resolve(
+          CupertinoColors.secondaryLabel,
+          popupContext,
+        );
+        return CupertinoActionSheet(
+          title: const Text('选择账户'),
+          actions: accounts
+              .map(
+                (account) => CupertinoActionSheetAction(
+                  onPressed: () {
+                    Navigator.of(popupContext).pop(account.id);
+                  },
+                  isDefaultAction: currentSelection == account.id,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          account.name,
+                          style: _formValueStyle(popupContext),
+                        ),
+                      ),
+                      Text(
+                        account.type.displayName,
+                        style: _formValueStyle(
+                          popupContext,
+                          placeholder: true,
+                        ).copyWith(
+                          fontSize: 14,
+                          color: secondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              )
+              .toList(),
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(popupContext).pop(),
+            child: const Text('取消'),
           ),
-        ).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-      ),
+        );
+      },
     ).then((accountId) {
       if (accountId != null) {
         onChanged(accountId);
       }
     });
+  }
+
+  TextStyle _formLabelStyle(BuildContext context) {
+    final base = CupertinoTheme.of(context).textTheme.textStyle;
+    final color = CupertinoDynamicColor.resolve(
+      CupertinoColors.secondaryLabel,
+      context,
+    );
+    return base.copyWith(fontSize: 16, color: color);
+  }
+
+  TextStyle _formValueStyle(BuildContext context, {bool placeholder = false}) {
+    final base = CupertinoTheme.of(context).textTheme.textStyle;
+    final color = CupertinoDynamicColor.resolve(
+      placeholder ? CupertinoColors.placeholderText : CupertinoColors.label,
+      context,
+    );
+    return base.copyWith(
+      fontSize: 16,
+      color: color,
+      height: 1.2,
+    );
+  }
+
+  void _showError(String message) {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('操作失败'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(message),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('我知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showDatePicker() {

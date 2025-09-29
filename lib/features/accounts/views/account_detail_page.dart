@@ -15,6 +15,7 @@ import '../../portfolios/views/trade_form_page.dart';
 import '../models/account_summary.dart';
 import '../models/operation_statistics.dart';
 import '../providers/account_summary_providers.dart';
+import 'account_form_page.dart';
 
 // Provider for account transactions
 final accountTransactionsProvider = StreamProvider.family<List<Transaction>, String>((ref, accountId) {
@@ -1047,7 +1048,20 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
 
   // 各种操作方法
   void _showEditAccount() {
-    // TODO: 导航到账户编辑页面
+    final account = widget.accountSummary.account;
+    Navigator.of(context)
+        .push<bool>(
+          CupertinoPageRoute(
+            builder: (context) => AccountFormPage(account: account),
+          ),
+        )
+        .then((changed) {
+          if (changed == true) {
+            ref.invalidate(accountsStreamProvider);
+            ref.invalidate(accountSummariesProvider);
+            ref.invalidate(dashboardDataProvider);
+          }
+        });
   }
 
   void _showDeleteAccount() {
