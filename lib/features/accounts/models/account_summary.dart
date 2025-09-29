@@ -18,11 +18,11 @@ class AccountSummary {
 
   double get effectiveBalance {
     if (isInvestment) {
-      return holdingsValue;
+      return holdingsValue + account.balance; // 持仓市值 + 现金余额 = 总资产
     }
     final base = account.balance;
     return isLiability ? -base.abs() : base;
   }
 
-  double get displayBalance => isInvestment ? holdingsValue : account.balance;
+  double get displayBalance => isInvestment ? holdingsValue + account.balance : account.balance;
 }

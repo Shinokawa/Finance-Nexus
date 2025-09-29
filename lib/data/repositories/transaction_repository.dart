@@ -20,6 +20,9 @@ class TransactionRepository {
   Future<List<Transaction>> getTransactionsByHolding(String holdingId) =>
       _dao.getTransactionsByHolding(holdingId);
 
+  Stream<List<Transaction>> watchTransactionsByAccount(String accountId) =>
+    _dao.watchTransactionsByAccount(accountId);
+
   Future<String> createTransaction({
     required double amount,
     required DateTime date,

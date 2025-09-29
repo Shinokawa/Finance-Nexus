@@ -35,6 +35,7 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
   List<Account> _investmentAccounts = [];
   List<Portfolio> _portfolios = [];
   DateTime _purchaseDate = DateTime.now();
+  Transaction? _primaryBuyTransaction;
   bool _isLoading = false;
 
   bool get _isEditing => widget.holding != null;
@@ -129,12 +130,19 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
         if (buyTransactions.isNotEmpty) {
           buyTransactions.sort((a, b) => a.date.compareTo(b.date));
           setState(() {
-            _purchaseDate = buyTransactions.first.date;
+            _primaryBuyTransaction = buyTransactions.first;
+            _purchaseDate = _primaryBuyTransaction!.date;
           });
+          debugPrint('[HoldingForm] Loaded primary buy transaction ${_primaryBuyTransaction!.id} for holding ${widget.holding!.id}');
+        } else {
+          debugPrint('[HoldingForm][WARN] Holding ${widget.holding!.id} has no buy transactions; purchase date editing will have no effect.');
         }
+      } else {
+        debugPrint('[HoldingForm][WARN] No transactions found for holding ${widget.holding!.id}.');
       }
     } catch (e) {
       // Handle error - keep default date
+      debugPrint('[HoldingForm][ERROR] Failed to load purchase date for holding ${widget.holding!.id}: $e');
     }
   }
 
@@ -445,7 +453,21 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
                 maximumDate: DateTime.now(),
                 onDateTimeChanged: (DateTime newDate) {
                   setState(() {
-                    _purchaseDate = newDate;
+                    final original = _primaryBuyTransaction?.date;
+                    if (original != null) {
+                      _purchaseDate = DateTime(
+                        newDate.year,
+                        newDate.month,
+                        newDate.day,
+                        original.hour,
+                        original.minute,
+                        original.second,
+                        original.millisecond,
+                        original.microsecond,
+                      );
+                    } else {
+                      _purchaseDate = newDate;
+                    }
                   });
                 },
               ),
@@ -598,6 +620,8 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
       return;
     }
 
+    final notes = _notesController.text.trim();
+
     setState(() {
       _isLoading = true;
     });
@@ -610,16 +634,40 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
           quantity: quantity,
           averageCost: averageCost,
           accountId: _selectedAccountId!,
+          purchaseDate: _purchaseDate,
         );
+        await _updatePurchaseDateIfNeeded();
       } else {
         // 创建新持仓
-        await ref.read(holdingRepositoryProvider).createHolding(
+        final holdingRepository = ref.read(holdingRepositoryProvider);
+        final createdHolding = await holdingRepository.createHolding(
           symbol: symbol,
           quantity: quantity,
           averageCost: averageCost,
           accountId: _selectedAccountId!,
           portfolioId: _selectedPortfolioId!,
+          purchaseDate: _purchaseDate,
         );
+
+        try {
+          final createdTransaction = await _createPrimaryBuyTransaction(
+            holding: createdHolding,
+            quantity: quantity,
+            price: averageCost,
+            date: _purchaseDate,
+            notes: notes.isEmpty ? null : notes,
+            category: '股票买入',
+          );
+          debugPrint('[HoldingForm] Created initial buy transaction ${createdTransaction.id} for holding ${createdHolding.id}.');
+          if (mounted) {
+            setState(() {
+              _primaryBuyTransaction = createdTransaction;
+            });
+          }
+        } catch (e, stackTrace) {
+          debugPrint('[HoldingForm][ERROR] Failed to create initial buy transaction for holding ${createdHolding.id}: $e\n$stackTrace');
+          rethrow;
+        }
       }
 
       if (mounted) {
@@ -778,5 +826,118 @@ class _HoldingFormPageState extends ConsumerState<HoldingFormPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _updatePurchaseDateIfNeeded() async {
+    final holding = widget.holding;
+    if (holding == null) {
+      debugPrint('[HoldingForm][WARN] Tried to update purchase date without an active holding.');
+      return;
+    }
+
+    var buyTransaction = _primaryBuyTransaction;
+    if (buyTransaction == null) {
+      debugPrint('[HoldingForm][INFO] No existing buy transaction. Creating one for holding ${holding.id}.');
+      try {
+        final created = await _createPrimaryBuyTransaction(
+          holding: holding,
+          quantity: holding.quantity,
+          price: holding.averageCost,
+          date: _purchaseDate,
+          notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+          category: '初始建仓补记',
+        );
+        if (mounted) {
+          setState(() {
+            _primaryBuyTransaction = created;
+            _purchaseDate = created.date;
+          });
+        }
+        debugPrint('[HoldingForm] Created primary buy transaction ${created.id} for holding ${holding.id}.');
+        return;
+      } catch (e, stackTrace) {
+        debugPrint('[HoldingForm][ERROR] Failed to create primary buy transaction for holding ${holding.id}: $e\n$stackTrace');
+        rethrow;
+      }
+    }
+
+    if (_isSameCalendarDate(_purchaseDate, buyTransaction.date)) {
+      debugPrint('[HoldingForm] Purchase date unchanged for transaction ${buyTransaction.id}.');
+      return;
+    }
+
+    final updatedTransaction = buyTransaction.copyWith(date: _purchaseDate);
+
+    try {
+      final success = await ref.read(transactionRepositoryProvider).updateTransaction(updatedTransaction);
+      if (!success) {
+        throw Exception('交易记录更新失败');
+      }
+      debugPrint('[HoldingForm] Updated primary buy transaction ${buyTransaction.id} date to $_purchaseDate.');
+      if (mounted) {
+        setState(() {
+          _primaryBuyTransaction = updatedTransaction;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[HoldingForm][ERROR] Failed to update primary buy transaction ${buyTransaction.id}: $e\n$stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<Transaction> _createPrimaryBuyTransaction({
+    required Holding holding,
+    required double quantity,
+    required double price,
+    required DateTime date,
+    String? notes,
+    required String category,
+  }) async {
+    final transactionRepository = ref.read(transactionRepositoryProvider);
+    final sanitizedNotes = (notes ?? '').trim();
+    final amount = quantity * price;
+
+    final transactionId = await transactionRepository.createTransaction(
+      amount: amount,
+      date: date,
+      type: TransactionType.buy,
+      category: category,
+      notes: sanitizedNotes.isEmpty ? null : sanitizedNotes,
+      fromAccountId: holding.accountId,
+      relatedHoldingId: holding.id,
+    );
+
+    final transactions = await transactionRepository.getTransactionsByHolding(holding.id);
+    Transaction? created;
+    for (final transaction in transactions) {
+      if (transaction.id == transactionId) {
+        created = transaction;
+        break;
+      }
+    }
+
+    created ??= _findEarliestBuyTransaction(transactions);
+
+    if (created == null) {
+      throw Exception('无法加载创建的买入交易记录');
+    }
+
+    return created;
+  }
+
+  Transaction? _findEarliestBuyTransaction(List<Transaction> transactions) {
+    Transaction? earliest;
+    for (final transaction in transactions) {
+      if (transaction.type == TransactionType.buy) {
+        if (earliest == null || transaction.date.isBefore(earliest.date)) {
+          earliest = transaction;
+        }
+      }
+    }
+    return earliest;
+  }
+
+  bool _isSameCalendarDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }

@@ -788,6 +788,17 @@ class $HoldingsTable extends Holdings with TableInfo<$HoldingsTable, Holding> {
       'REFERENCES portfolios (id)',
     ),
   );
+  static const VerificationMeta _purchaseDateMeta = const VerificationMeta(
+    'purchaseDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> purchaseDate = GeneratedColumn<DateTime>(
+    'purchase_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -796,6 +807,7 @@ class $HoldingsTable extends Holdings with TableInfo<$HoldingsTable, Holding> {
     averageCost,
     accountId,
     portfolioId,
+    purchaseDate,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -854,6 +866,15 @@ class $HoldingsTable extends Holdings with TableInfo<$HoldingsTable, Holding> {
     } else if (isInserting) {
       context.missing(_portfolioIdMeta);
     }
+    if (data.containsKey('purchase_date')) {
+      context.handle(
+        _purchaseDateMeta,
+        purchaseDate.isAcceptableOrUnknown(
+          data['purchase_date']!,
+          _purchaseDateMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -887,6 +908,10 @@ class $HoldingsTable extends Holdings with TableInfo<$HoldingsTable, Holding> {
         DriftSqlType.string,
         data['${effectivePrefix}portfolio_id'],
       )!,
+      purchaseDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}purchase_date'],
+      ),
     );
   }
 
@@ -903,6 +928,7 @@ class Holding extends DataClass implements Insertable<Holding> {
   final double averageCost;
   final String accountId;
   final String portfolioId;
+  final DateTime? purchaseDate;
   const Holding({
     required this.id,
     required this.symbol,
@@ -910,6 +936,7 @@ class Holding extends DataClass implements Insertable<Holding> {
     required this.averageCost,
     required this.accountId,
     required this.portfolioId,
+    this.purchaseDate,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -920,6 +947,9 @@ class Holding extends DataClass implements Insertable<Holding> {
     map['average_cost'] = Variable<double>(averageCost);
     map['account_id'] = Variable<String>(accountId);
     map['portfolio_id'] = Variable<String>(portfolioId);
+    if (!nullToAbsent || purchaseDate != null) {
+      map['purchase_date'] = Variable<DateTime>(purchaseDate);
+    }
     return map;
   }
 
@@ -931,6 +961,9 @@ class Holding extends DataClass implements Insertable<Holding> {
       averageCost: Value(averageCost),
       accountId: Value(accountId),
       portfolioId: Value(portfolioId),
+      purchaseDate: purchaseDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(purchaseDate),
     );
   }
 
@@ -946,6 +979,7 @@ class Holding extends DataClass implements Insertable<Holding> {
       averageCost: serializer.fromJson<double>(json['averageCost']),
       accountId: serializer.fromJson<String>(json['accountId']),
       portfolioId: serializer.fromJson<String>(json['portfolioId']),
+      purchaseDate: serializer.fromJson<DateTime?>(json['purchaseDate']),
     );
   }
   @override
@@ -958,6 +992,7 @@ class Holding extends DataClass implements Insertable<Holding> {
       'averageCost': serializer.toJson<double>(averageCost),
       'accountId': serializer.toJson<String>(accountId),
       'portfolioId': serializer.toJson<String>(portfolioId),
+      'purchaseDate': serializer.toJson<DateTime?>(purchaseDate),
     };
   }
 
@@ -968,6 +1003,7 @@ class Holding extends DataClass implements Insertable<Holding> {
     double? averageCost,
     String? accountId,
     String? portfolioId,
+    Value<DateTime?> purchaseDate = const Value.absent(),
   }) => Holding(
     id: id ?? this.id,
     symbol: symbol ?? this.symbol,
@@ -975,6 +1011,7 @@ class Holding extends DataClass implements Insertable<Holding> {
     averageCost: averageCost ?? this.averageCost,
     accountId: accountId ?? this.accountId,
     portfolioId: portfolioId ?? this.portfolioId,
+    purchaseDate: purchaseDate.present ? purchaseDate.value : this.purchaseDate,
   );
   Holding copyWithCompanion(HoldingsCompanion data) {
     return Holding(
@@ -988,6 +1025,9 @@ class Holding extends DataClass implements Insertable<Holding> {
       portfolioId: data.portfolioId.present
           ? data.portfolioId.value
           : this.portfolioId,
+      purchaseDate: data.purchaseDate.present
+          ? data.purchaseDate.value
+          : this.purchaseDate,
     );
   }
 
@@ -999,14 +1039,22 @@ class Holding extends DataClass implements Insertable<Holding> {
           ..write('quantity: $quantity, ')
           ..write('averageCost: $averageCost, ')
           ..write('accountId: $accountId, ')
-          ..write('portfolioId: $portfolioId')
+          ..write('portfolioId: $portfolioId, ')
+          ..write('purchaseDate: $purchaseDate')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, symbol, quantity, averageCost, accountId, portfolioId);
+  int get hashCode => Object.hash(
+    id,
+    symbol,
+    quantity,
+    averageCost,
+    accountId,
+    portfolioId,
+    purchaseDate,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1016,7 +1064,8 @@ class Holding extends DataClass implements Insertable<Holding> {
           other.quantity == this.quantity &&
           other.averageCost == this.averageCost &&
           other.accountId == this.accountId &&
-          other.portfolioId == this.portfolioId);
+          other.portfolioId == this.portfolioId &&
+          other.purchaseDate == this.purchaseDate);
 }
 
 class HoldingsCompanion extends UpdateCompanion<Holding> {
@@ -1026,6 +1075,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
   final Value<double> averageCost;
   final Value<String> accountId;
   final Value<String> portfolioId;
+  final Value<DateTime?> purchaseDate;
   final Value<int> rowid;
   const HoldingsCompanion({
     this.id = const Value.absent(),
@@ -1034,6 +1084,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
     this.averageCost = const Value.absent(),
     this.accountId = const Value.absent(),
     this.portfolioId = const Value.absent(),
+    this.purchaseDate = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   HoldingsCompanion.insert({
@@ -1043,6 +1094,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
     this.averageCost = const Value.absent(),
     required String accountId,
     required String portfolioId,
+    this.purchaseDate = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : symbol = Value(symbol),
        accountId = Value(accountId),
@@ -1054,6 +1106,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
     Expression<double>? averageCost,
     Expression<String>? accountId,
     Expression<String>? portfolioId,
+    Expression<DateTime>? purchaseDate,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1063,6 +1116,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
       if (averageCost != null) 'average_cost': averageCost,
       if (accountId != null) 'account_id': accountId,
       if (portfolioId != null) 'portfolio_id': portfolioId,
+      if (purchaseDate != null) 'purchase_date': purchaseDate,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1074,6 +1128,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
     Value<double>? averageCost,
     Value<String>? accountId,
     Value<String>? portfolioId,
+    Value<DateTime?>? purchaseDate,
     Value<int>? rowid,
   }) {
     return HoldingsCompanion(
@@ -1083,6 +1138,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
       averageCost: averageCost ?? this.averageCost,
       accountId: accountId ?? this.accountId,
       portfolioId: portfolioId ?? this.portfolioId,
+      purchaseDate: purchaseDate ?? this.purchaseDate,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1108,6 +1164,9 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
     if (portfolioId.present) {
       map['portfolio_id'] = Variable<String>(portfolioId.value);
     }
+    if (purchaseDate.present) {
+      map['purchase_date'] = Variable<DateTime>(purchaseDate.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1123,6 +1182,7 @@ class HoldingsCompanion extends UpdateCompanion<Holding> {
           ..write('averageCost: $averageCost, ')
           ..write('accountId: $accountId, ')
           ..write('portfolioId: $portfolioId, ')
+          ..write('purchaseDate: $purchaseDate, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2563,6 +2623,7 @@ typedef $$HoldingsTableCreateCompanionBuilder =
       Value<double> averageCost,
       required String accountId,
       required String portfolioId,
+      Value<DateTime?> purchaseDate,
       Value<int> rowid,
     });
 typedef $$HoldingsTableUpdateCompanionBuilder =
@@ -2573,6 +2634,7 @@ typedef $$HoldingsTableUpdateCompanionBuilder =
       Value<double> averageCost,
       Value<String> accountId,
       Value<String> portfolioId,
+      Value<DateTime?> purchaseDate,
       Value<int> rowid,
     });
 
@@ -2664,6 +2726,11 @@ class $$HoldingsTableFilterComposer
 
   ColumnFilters<double> get averageCost => $composableBuilder(
     column: $table.averageCost,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get purchaseDate => $composableBuilder(
+    column: $table.purchaseDate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2768,6 +2835,11 @@ class $$HoldingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get purchaseDate => $composableBuilder(
+    column: $table.purchaseDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$AccountsTableOrderingComposer get accountId {
     final $$AccountsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2835,6 +2907,11 @@ class $$HoldingsTableAnnotationComposer
 
   GeneratedColumn<double> get averageCost => $composableBuilder(
     column: $table.averageCost,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get purchaseDate => $composableBuilder(
+    column: $table.purchaseDate,
     builder: (column) => column,
   );
 
@@ -2948,6 +3025,7 @@ class $$HoldingsTableTableManager
                 Value<double> averageCost = const Value.absent(),
                 Value<String> accountId = const Value.absent(),
                 Value<String> portfolioId = const Value.absent(),
+                Value<DateTime?> purchaseDate = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => HoldingsCompanion(
                 id: id,
@@ -2956,6 +3034,7 @@ class $$HoldingsTableTableManager
                 averageCost: averageCost,
                 accountId: accountId,
                 portfolioId: portfolioId,
+                purchaseDate: purchaseDate,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2966,6 +3045,7 @@ class $$HoldingsTableTableManager
                 Value<double> averageCost = const Value.absent(),
                 required String accountId,
                 required String portfolioId,
+                Value<DateTime?> purchaseDate = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => HoldingsCompanion.insert(
                 id: id,
@@ -2974,6 +3054,7 @@ class $$HoldingsTableTableManager
                 averageCost: averageCost,
                 accountId: accountId,
                 portfolioId: portfolioId,
+                purchaseDate: purchaseDate,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

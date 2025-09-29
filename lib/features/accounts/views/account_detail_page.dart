@@ -17,16 +17,24 @@ import '../models/operation_statistics.dart';
 import '../providers/account_summary_providers.dart';
 
 // Provider for account transactions
-final accountTransactionsProvider = FutureProvider.family<List<Transaction>, String>((ref, accountId) async {
+final accountTransactionsProvider = StreamProvider.family<List<Transaction>, String>((ref, accountId) {
   final repository = ref.watch(transactionRepositoryProvider);
-  final transactions = await repository.getTransactionsByAccount(accountId);
-  final sorted = [...transactions]..sort((a, b) => b.date.compareTo(a.date));
-  return sorted;
+  return repository.watchTransactionsByAccount(accountId).map((transactions) {
+    final sorted = [...transactions]..sort((a, b) => b.date.compareTo(a.date));
+    return sorted;
+  });
 });
 
-final accountOperationStatsProvider = FutureProvider.family<OperationStatistics, String>((ref, accountId) async {
-  final repository = ref.watch(transactionRepositoryProvider);
-  final transactions = await repository.getTransactionsByAccount(accountId);
+final accountOperationStatsProvider = Provider.family<AsyncValue<OperationStatistics>, String>((ref, accountId) {
+  final transactionsAsync = ref.watch(accountTransactionsProvider(accountId));
+  return transactionsAsync.when(
+    data: (transactions) => AsyncValue.data(_calculateOperationStatistics(transactions)),
+    loading: () => const AsyncValue.loading(),
+    error: (error, stackTrace) => AsyncValue.error(error, stackTrace),
+  );
+});
+
+OperationStatistics _calculateOperationStatistics(List<Transaction> transactions) {
   if (transactions.isEmpty) {
     return OperationStatistics.empty;
   }
@@ -105,7 +113,7 @@ final accountOperationStatsProvider = FutureProvider.family<OperationStatistics,
     averageHoldingDays: averageHoldingDays,
     winRate: winRate,
   );
-});
+}
 
 class AccountDetailPage extends ConsumerStatefulWidget {
   const AccountDetailPage({

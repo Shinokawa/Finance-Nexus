@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
 import '../../../providers/repository_providers.dart';
+import '../../dashboard/providers/holding_positions_provider.dart';
 import '../models/account_summary.dart';
 import '../models/portfolio_summary.dart';
 
@@ -21,19 +22,18 @@ final holdingsStreamProvider = StreamProvider<List<Holding>>((ref) {
 final accountSummariesProvider = Provider<AsyncValue<List<AccountSummary>>>(
   (ref) {
     final accountsAsync = ref.watch(accountsStreamProvider);
-    final holdingsAsync = ref.watch(holdingsStreamProvider);
+    final positionsAsync = ref.watch(holdingPositionsProvider);
 
     return accountsAsync.when(
       data: (accounts) {
-        return holdingsAsync.when(
-          data: (holdings) {
+        return positionsAsync.when(
+          data: (positions) {
             final holdingsByAccount = <String, double>{};
-            for (final holding in holdings) {
+            for (final position in positions) {
               holdingsByAccount.update(
-                holding.accountId,
-                (value) =>
-                    value + (holding.quantity * holding.averageCost),
-                ifAbsent: () => holding.quantity * holding.averageCost,
+                position.account.id,
+                (value) => value + position.marketValue,
+                ifAbsent: () => position.marketValue,
               );
             }
             final summaries = accounts
@@ -71,19 +71,18 @@ final groupedAccountSummariesProvider =
 final portfolioSummariesProvider = Provider<AsyncValue<List<PortfolioSummary>>>(
   (ref) {
     final portfoliosAsync = ref.watch(portfoliosStreamProvider);
-    final holdingsAsync = ref.watch(holdingsStreamProvider);
+    final positionsAsync = ref.watch(holdingPositionsProvider);
 
     return portfoliosAsync.when(
       data: (portfolios) {
-        return holdingsAsync.when(
-          data: (holdings) {
+        return positionsAsync.when(
+          data: (positions) {
             final holdingsByPortfolio = <String, double>{};
-            for (final holding in holdings) {
+            for (final position in positions) {
               holdingsByPortfolio.update(
-                holding.portfolioId,
-                (value) =>
-                    value + (holding.quantity * holding.averageCost),
-                ifAbsent: () => holding.quantity * holding.averageCost,
+                position.portfolio.id,
+                (value) => value + position.marketValue,
+                ifAbsent: () => position.marketValue,
               );
             }
             final summaries = portfolios

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'package:uuid/uuid.dart';
 
 import '../local/app_database.dart';
 
@@ -26,12 +27,13 @@ class HoldingRepository {
   Stream<List<Holding>> watchHoldingsByAccount(String accountId) =>
       _holdingDao.watchHoldingsByAccount(accountId);
 
-  Future<void> createHolding({
+  Future<Holding> createHolding({
     required String symbol,
     required double quantity,
     required double averageCost,
     required String accountId,
     required String portfolioId,
+    DateTime? purchaseDate,
   }) async {
     final normalizedSymbol = _normalizeSymbol(symbol);
     final existingHoldings = await _holdingDao.getHoldingsByPortfolio(portfolioId);
@@ -51,26 +53,40 @@ class HoldingRepository {
       final totalCost = (existingQuantity * existing.averageCost) + (quantity * averageCost);
       final newAverageCost = totalQuantity <= 0 ? 0.0 : totalCost / totalQuantity;
 
-      await updateHolding(
-        existing,
+      final updatedPurchaseDate = _resolvePurchaseDate(
+        existing.purchaseDate,
+        purchaseDate,
+      );
+
+      final updated = existing.copyWith(
+        symbol: normalizedSymbol,
         quantity: totalQuantity,
         averageCost: newAverageCost,
         accountId: accountId,
         portfolioId: portfolioId,
-        symbol: normalizedSymbol,
+        purchaseDate: Value(updatedPurchaseDate),
       );
-      return;
+      await _holdingDao.updateHolding(updated);
+      return updated;
     }
 
+    final holdingId = const Uuid().v4();
     await _holdingDao.insertHolding(
       HoldingsCompanion.insert(
+        id: Value(holdingId),
         symbol: normalizedSymbol,
         quantity: Value(quantity),
         averageCost: Value(averageCost),
         accountId: accountId,
         portfolioId: portfolioId,
+        purchaseDate: purchaseDate != null ? Value(purchaseDate) : const Value.absent(),
       ),
     );
+    final inserted = await _holdingDao.getHoldingById(holdingId);
+    if (inserted == null) {
+      throw Exception('Holding insertion failed for symbol $normalizedSymbol');
+    }
+    return inserted;
   }
 
   Future<void> updateHolding(
@@ -80,14 +96,17 @@ class HoldingRepository {
     String? accountId,
     String? portfolioId,
     String? symbol,
+    DateTime? purchaseDate,
   }) async {
     final normalizedSymbol = _normalizeSymbol(symbol ?? holding.symbol);
+    final resolvedPurchaseDate = purchaseDate ?? holding.purchaseDate;
     final updated = holding.copyWith(
       symbol: normalizedSymbol,
       quantity: quantity ?? holding.quantity,
       averageCost: averageCost ?? holding.averageCost,
       accountId: accountId ?? holding.accountId,
       portfolioId: portfolioId ?? holding.portfolioId,
+      purchaseDate: Value(resolvedPurchaseDate),
     );
     await _holdingDao.updateHolding(updated);
   }
@@ -98,4 +117,10 @@ class HoldingRepository {
       holding.quantity * holding.averageCost;
 
   String _normalizeSymbol(String value) => value.trim().toUpperCase();
+
+  DateTime? _resolvePurchaseDate(DateTime? current, DateTime? incoming) {
+    if (current == null) return incoming;
+    if (incoming == null) return current;
+    return current.isBefore(incoming) ? current : incoming;
+  }
 }

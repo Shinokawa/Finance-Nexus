@@ -64,6 +64,8 @@ class Holdings extends Table {
   TextColumn get accountId => text().references(Accounts, #id)();
 
   TextColumn get portfolioId => text().references(Portfolios, #id)();
+
+  DateTimeColumn get purchaseDate => dateTime().nullable()();
 }
 
 @DataClassName('Transaction')
@@ -119,7 +121,19 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) async {
+          await m.createAll();
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(holdings, holdings.purchaseDate);
+          }
+        },
+      );
 }
 
 @DriftAccessor(tables: [Accounts])
@@ -232,6 +246,13 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return (select(transactions)
           ..where((tbl) => tbl.fromAccountId.equals(accountId) | tbl.toAccountId.equals(accountId)))
         .get();
+  }
+
+  Stream<List<Transaction>> watchTransactionsByAccount(String accountId) {
+    final query = select(transactions)
+      ..where((tbl) => tbl.fromAccountId.equals(accountId) | tbl.toAccountId.equals(accountId))
+      ..orderBy([(tbl) => OrderingTerm(expression: tbl.date, mode: OrderingMode.desc)]);
+    return query.watch();
   }
 
   Future<List<Transaction>> getTransactionsByHolding(String holdingId) {
