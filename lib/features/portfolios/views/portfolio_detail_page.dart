@@ -145,10 +145,6 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
         : (snapshot.realizedProfit / snapshot.costBasis) * 100;
     final netText = _formatChangeWithPercent(snapshot.netProfit, netPercent);
     final realizedText = _formatChangeWithPercent(snapshot.realizedProfit, realizedPercent);
-    final unrealizedText = _formatChangeWithPercent(
-      snapshot.unrealizedProfit,
-      snapshot.unrealizedPercent,
-    );
     final tradingCostText = _formatSignedCurrency(-snapshot.tradingCost);
 
     String formatPercent(double? value) {
@@ -207,9 +203,9 @@ class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
           ),
           Expanded(
             child: _buildMetricItem(
-              '未实现盈亏',
-              unrealizedText,
-              _resolveChangeColor(snapshot.unrealizedProfit),
+              '总盈亏',
+              netText,
+              _resolveChangeColor(snapshot.netProfit),
             ),
           ),
         ],

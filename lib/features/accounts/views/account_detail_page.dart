@@ -499,7 +499,6 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
     final costBasis = snapshot?.costBasis;
     final netProfit = snapshot?.netProfit;
     final realizedProfit = snapshot?.realizedProfit;
-    final unrealizedProfit = snapshot?.unrealizedProfit;
     final tradingCost = snapshot?.tradingCost;
     final todayProfit = snapshot?.todayProfit;
     final todayPercent = snapshot?.todayProfitPercent;
@@ -559,25 +558,6 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
             ),
             Expanded(
               child: _buildMetricItem(
-                '已实现盈亏',
-                formatChange(realizedProfit, realizedPercent),
-                _resolveChangeColor(realizedProfit),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildMetricItem(
-                '未实现盈亏',
-                formatChange(unrealizedProfit, snapshot?.unrealizedPercent),
-                _resolveChangeColor(unrealizedProfit),
-              ),
-            ),
-            Expanded(
-              child: _buildMetricItem(
                 '交易成本',
                 tradingCost != null ? _formatSignedCurrency(-tradingCost) : '--',
                 _resolveChangeColor(tradingCost != null ? -tradingCost : null),
@@ -590,15 +570,15 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           children: [
             Expanded(
               child: _buildMetricItem(
-                '今日盈亏',
-                _formatSignedCurrency(todayProfit),
-                _resolveChangeColor(todayProfit),
+                '已实现盈亏',
+                formatChange(realizedProfit, realizedPercent),
+                _resolveChangeColor(realizedProfit),
               ),
             ),
             Expanded(
               child: _buildMetricItem(
-                '今日涨跌幅',
-                formatPercent(todayPercent),
+                '今日盈亏',
+                _formatSignedCurrency(todayProfit),
                 _resolveChangeColor(todayProfit),
               ),
             ),
@@ -609,16 +589,28 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           children: [
             Expanded(
               child: _buildMetricItem(
+                '今日涨跌幅',
+                formatPercent(todayPercent),
+                _resolveChangeColor(todayProfit),
+              ),
+            ),
+            Expanded(
+              child: _buildMetricItem(
                 '总收益率',
                 formatPercent(netPercent),
                 _resolveChangeColor(netProfit),
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
             Expanded(
               child: _buildMetricItem(
-                '未实现收益率',
-                formatPercent(snapshot?.unrealizedPercent),
-                _resolveChangeColor(unrealizedProfit),
+                '已实现收益率',
+                formatPercent(realizedPercent),
+                _resolveChangeColor(realizedProfit),
               ),
             ),
           ],

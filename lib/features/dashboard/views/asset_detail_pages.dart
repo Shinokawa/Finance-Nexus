@@ -276,15 +276,25 @@ class _HoldingContent extends StatelessWidget {
             const SizedBox(height: 12),
             _buildInfoGrid([
               _InfoPair(
-                label: '未实现盈亏',
-                value: _formatSignedCurrency(position.unrealizedProfit),
-                isProfit: position.unrealizedProfit >= 0,
+                label: '总盈亏',
+                value: _formatSignedCurrency(position.netProfit),
+                isProfit: position.netProfit >= 0,
               ),
-              if (position.unrealizedPercent != null)
+              if (position.netPercent != null)
                 _InfoPair(
-                  label: '未实现收益率',
-                  value: _formatSignedPercent(position.unrealizedPercent),
-                  isProfit: position.unrealizedPercent! >= 0,
+                  label: '总收益率',
+                  value: _formatSignedPercent(position.netPercent),
+                  isProfit: position.netPercent! >= 0,
+                ),
+              _InfoPair(
+                label: '已实现盈亏',
+                value: _formatSignedCurrency(position.realizedProfit),
+                isProfit: position.realizedProfit >= 0,
+              ),
+              _InfoPair(
+                label: '交易成本',
+                value: _formatSignedCurrency(-position.tradingCost),
+                isProfit: position.tradingCost == 0 ? null : false,
                 ),
               if (position.todayProfit != null)
                 _InfoPair(
@@ -389,11 +399,6 @@ class _PortfolioOverviewCard extends StatelessWidget {
                   valueColor: _resolveChangeColor(snapshot.realizedProfit),
                 ),
                 _MiniMetric(
-                  label: '未实现盈亏',
-                  value: _formatChange(snapshot.unrealizedProfit, snapshot.unrealizedPercent),
-                  valueColor: _resolveChangeColor(snapshot.unrealizedProfit),
-                ),
-                _MiniMetric(
                   label: '交易成本',
                   value: _formatSignedCurrency(-snapshot.tradingCost),
                   valueColor: _resolveChangeColor(-snapshot.tradingCost),
@@ -457,11 +462,6 @@ class _AccountOverviewCard extends StatelessWidget {
             snapshot.costBasis == 0 ? null : (snapshot.realizedProfit / snapshot.costBasis) * 100,
           ),
           valueColor: _resolveChangeColor(snapshot.realizedProfit),
-        ),
-        _MiniMetric(
-          label: '未实现盈亏',
-          value: _formatChange(snapshot.unrealizedProfit, snapshot.unrealizedPercent),
-          valueColor: _resolveChangeColor(snapshot.unrealizedProfit),
         ),
         _MiniMetric(
           label: '交易成本',
@@ -595,14 +595,24 @@ class _HoldingOverviewCard extends StatelessWidget {
                 _MiniMetric(label: '持仓数量', value: _formatQuantity(position.quantity)),
                 _MiniMetric(label: '总成本', value: _formatCurrency(position.costBasis)),
                 _MiniMetric(
-                  label: '未实现盈亏',
-                  value: _formatSignedCurrency(position.unrealizedProfit), // 只显示金额，不显示百分比
-                  valueColor: _resolveChangeColor(position.unrealizedProfit),
+                  label: '总盈亏',
+                  value: _formatSignedCurrency(position.netProfit), // 只显示金额，不显示百分比
+                  valueColor: _resolveChangeColor(position.netProfit),
                 ),
                 _MiniMetric(
-                  label: '未实现收益率',
-                  value: _formatSignedPercent(position.unrealizedPercent),
-                  valueColor: _resolveChangeColor(position.unrealizedProfit),
+                  label: '总收益率',
+                  value: _formatSignedPercent(position.netPercent),
+                  valueColor: _resolveChangeColor(position.netProfit),
+                ),
+                _MiniMetric(
+                  label: '已实现盈亏',
+                  value: _formatSignedCurrency(position.realizedProfit),
+                  valueColor: _resolveChangeColor(position.realizedProfit),
+                ),
+                _MiniMetric(
+                  label: '交易成本',
+                  value: _formatSignedCurrency(-position.tradingCost),
+                  valueColor: _resolveChangeColor(-position.tradingCost),
                 ),
                 _MiniMetric(
                   label: '今日盈亏',
@@ -751,13 +761,13 @@ class _TopContributorsSection extends StatelessWidget {
     }
 
     final sorted = [...positions]..sort(
-        (a, b) => b.unrealizedProfit.compareTo(a.unrealizedProfit),
+        (a, b) => b.netProfit.compareTo(a.netProfit),
       );
-    final topGainers = sorted.where((p) => p.unrealizedProfit > 0).take(3).toList();
+    final topGainers = sorted.where((p) => p.netProfit > 0).take(3).toList();
     final topLosers = sorted
-        .where((p) => p.unrealizedProfit < 0)
+        .where((p) => p.netProfit < 0)
         .toList()
-      ..sort((a, b) => a.unrealizedProfit.compareTo(b.unrealizedProfit));
+      ..sort((a, b) => a.netProfit.compareTo(b.netProfit));
     final worst = topLosers.take(3).toList();
 
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
@@ -847,7 +857,7 @@ class _ContributorRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
     final secondary = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
-    final profitColor = _resolveChangeColor(position.unrealizedProfit);
+  final profitColor = _resolveChangeColor(position.netProfit);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -881,7 +891,7 @@ class _ContributorRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _formatChange(position.unrealizedProfit, position.unrealizedPercent),
+                  _formatChange(position.netProfit, position.netPercent),
                   style: QHTypography.subheadline.copyWith(
                     color: profitColor,
                     fontWeight: FontWeight.w600,
@@ -961,7 +971,7 @@ class _HoldingBreakdownCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardColor = CupertinoDynamicColor.resolve(QHColors.cardBackground, context);
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
-    final profitColor = _resolveChangeColor(position.unrealizedProfit);
+  final profitColor = _resolveChangeColor(position.netProfit);
     final todayColor = _resolveChangeColor(position.todayProfit);
 
     return DecoratedBox(
@@ -1023,13 +1033,13 @@ class _HoldingBreakdownCard extends StatelessWidget {
               children: [
                 _MiniMetric(label: '总成本', value: _formatCurrency(position.costBasis)),
                 _MiniMetric(
-                  label: '未实现盈亏',
-                  value: _formatChange(position.unrealizedProfit, position.unrealizedPercent),
+                  label: '总盈亏',
+                  value: _formatChange(position.netProfit, position.netPercent),
                   valueColor: profitColor,
                 ),
                 _MiniMetric(
-                  label: '未实现收益率',
-                  value: _formatSignedPercent(position.unrealizedPercent),
+                  label: '总收益率',
+                  value: _formatSignedPercent(position.netPercent),
                   valueColor: profitColor,
                 ),
                 _MiniMetric(

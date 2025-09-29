@@ -268,9 +268,6 @@ class _TotalNetWorthCard extends ConsumerWidget {
     ? null
     : (totalNetProfit / data.totalCostBasis) * 100;
   final cumulativeColor = _resolveChangeColor(totalNetProfit);
-  final realizedColor = _resolveChangeColor(data.totalRealizedProfit);
-  final unrealizedColor = _resolveChangeColor(data.totalUnrealizedProfit);
-  final tradingCostColor = _resolveChangeColor(-data.totalTradingCost);
     final todayColor = _resolveChangeColor(data.todayChange);
     
     // 计算资产分布
@@ -383,28 +380,10 @@ class _TotalNetWorthCard extends ConsumerWidget {
                     : null,
               ),
               _NetWorthMetric(
-                label: '已实现盈亏',
-                value: _formatSignedCurrency(data.totalRealizedProfit),
-                color: realizedColor,
-                subtitle: data.totalCostBasis == 0
-                    ? null
-                    : _formatSignedPercent((data.totalRealizedProfit / data.totalCostBasis) * 100),
-              ),
-              _NetWorthMetric(
-                label: '未实现盈亏',
-                value: _formatSignedCurrency(data.totalUnrealizedProfit),
-                color: unrealizedColor,
-                subtitle: data.totalCostBasis == 0
-                    ? null
-                    : _formatSignedPercent((data.totalUnrealizedProfit / data.totalCostBasis) * 100),
-              ),
-              _NetWorthMetric(
-                label: '交易成本',
-                value: _formatSignedCurrency(-data.totalTradingCost),
-                color: tradingCostColor,
-                subtitle: data.totalCostBasis == 0
-                    ? null
-                    : _formatSignedPercent((-data.totalTradingCost / data.totalCostBasis) * 100),
+                label: '本月支出',
+                value: _formatSignedCurrency(-data.currentMonthExpense),
+                color: _resolveChangeColor(-data.currentMonthExpense),
+                subtitle: null,
               ),
             ],
           ),
@@ -436,11 +415,88 @@ class _DashboardAssetCard extends StatelessWidget {
     final accent = _resolveAccentColor(context);
   final netPercent = row.costBasis == 0 ? null : (row.netProfit / row.costBasis) * 100;
   final netText = _formatChange(row.netProfit, netPercent);
-  final cumulativeText = _formatChange(row.unrealizedProfit, row.unrealizedPercent);
     final todayText = _formatChange(row.todayProfit, row.todayProfitPercent);
     final costText = _formatCurrency(row.costBasis);
     final shareText = _formatShare(row.share);
     final cashText = row.cashBalance == null ? null : _formatCurrency(row.cashBalance!);
+
+    final isCashAccount = !_isPortfolio && row.category == AccountType.cash;
+
+    final metrics = <_MetricPill>[];
+
+    if (isCashAccount) {
+      if (cashText != null && cashText != '--') {
+        metrics.add(
+          _MetricPill(
+            label: '账户现金',
+            value: cashText,
+          ),
+        );
+      }
+      metrics.add(
+        _MetricPill(
+          label: '资产占比',
+          value: shareText,
+        ),
+      );
+    } else {
+      metrics.add(
+        _MetricPill(
+          label: '总盈亏',
+          value: netText,
+          color: _resolveChangeColor(row.netProfit),
+        ),
+      );
+      metrics.add(
+        _MetricPill(
+          label: '已实现盈亏',
+          value: _formatSignedCurrency(row.realizedProfit),
+          color: _resolveChangeColor(row.realizedProfit),
+        ),
+      );
+      metrics.add(
+        _MetricPill(
+          label: '交易成本',
+          value: _formatSignedCurrency(-row.tradingCost),
+          color: _resolveChangeColor(-row.tradingCost),
+        ),
+      );
+      metrics.add(
+        _MetricPill(
+          label: '今日盈亏',
+          value: todayText,
+          color: _resolveChangeColor(row.todayProfit),
+        ),
+      );
+      metrics.add(
+        _MetricPill(
+          label: _isPortfolio ? '组合成本' : '资产成本',
+          value: costText,
+        ),
+      );
+      if (cashText != null && cashText != '--') {
+        metrics.add(
+          _MetricPill(
+            label: '账户现金',
+            value: cashText,
+          ),
+        );
+      }
+      if (row.holdingsCount > 0) {
+        metrics.add(
+          _MetricPill(
+            label: '持仓数量',
+            value: '${row.holdingsCount} 项',
+          ),
+        );
+      }
+      metrics.add(
+        _MetricPill(
+          label: '资产占比',
+          value: shareText,
+        ),
+      );
+    }
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -458,7 +514,7 @@ class _DashboardAssetCard extends StatelessWidget {
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -476,7 +532,7 @@ class _DashboardAssetCard extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           row.subtitle,
                           style: QHTypography.subheadline.copyWith(
@@ -493,7 +549,7 @@ class _DashboardAssetCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 12),
               Text(
                 _formatCurrency(row.marketValue),
                 style: QHTypography.title1.copyWith(
@@ -502,57 +558,13 @@ class _DashboardAssetCard extends StatelessWidget {
                   color: row.marketValue < 0 ? QHColors.loss : labelColor,
                 ),
               ),
-              const SizedBox(height: 14),
-              Wrap(
+                const SizedBox(height: 10),
+                Wrap(
                 spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _MetricPill(
-                    label: '总盈亏',
-                    value: netText,
-                    color: _resolveChangeColor(row.netProfit),
-                  ),
-                  _MetricPill(
-                    label: '未实现盈亏',
-                    value: cumulativeText,
-                    color: _resolveChangeColor(row.unrealizedProfit),
-                  ),
-                  _MetricPill(
-                    label: '已实现盈亏',
-                    value: _formatSignedCurrency(row.realizedProfit),
-                    color: _resolveChangeColor(row.realizedProfit),
-                  ),
-                  _MetricPill(
-                    label: '交易成本',
-                    value: _formatSignedCurrency(-row.tradingCost),
-                    color: _resolveChangeColor(-row.tradingCost),
-                  ),
-                  _MetricPill(
-                    label: '今日盈亏',
-                    value: todayText,
-                    color: _resolveChangeColor(row.todayProfit),
-                  ),
-                  _MetricPill(
-                    label: _isPortfolio ? '组合成本' : '资产成本',
-                    value: costText,
-                  ),
-                  if (cashText != null && cashText != '--')
-                    _MetricPill(
-                      label: '账户现金',
-                      value: cashText,
-                    ),
-                  if (row.holdingsCount > 0)
-                    _MetricPill(
-                      label: '持仓数量',
-                      value: '${row.holdingsCount} 项',
-                    ),
-                  _MetricPill(
-                    label: '资产占比',
-                    value: shareText,
-                  ),
-                ],
+                  runSpacing: 10,
+                  children: metrics,
               ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerRight,
                 child: Icon(
@@ -625,17 +637,17 @@ class _AssetCompositionSection extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             color: resolvedBackground,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: CupertinoColors.black.withValues(alpha: 0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 12),
+                color: CupertinoColors.black.withValues(alpha: 0.04),
+                blurRadius: 14,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             child: hasData
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -649,7 +661,7 @@ class _AssetCompositionSection extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 24),
+                      const SizedBox(width: 20),
                       Expanded(
                         flex: 3,
                         child: Column(
@@ -657,7 +669,7 @@ class _AssetCompositionSection extends StatelessWidget {
                           children: [
                             for (final slice in slices)
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.only(bottom: 8),
                                 child: Row(
                                   children: [
                                     Container(
@@ -920,14 +932,17 @@ class _HoldingsSection extends StatelessWidget {
               );
             }
 
-            final totalMarketValue =
-                positions.fold<double>(0, (sum, position) => sum + position.marketValue);
-            final totalCostBasis =
-                positions.fold<double>(0, (sum, position) => sum + position.costBasis);
-            final totalUnrealized = totalMarketValue - totalCostBasis;
-            final totalUnrealizedPercent = totalCostBasis == 0
-                ? null
-                : (totalUnrealized / totalCostBasis) * 100;
+      final totalMarketValue =
+        positions.fold<double>(0, (sum, position) => sum + position.marketValue);
+      final totalCostBasis =
+        positions.fold<double>(0, (sum, position) => sum + position.costBasis);
+      final totalNetProfit =
+        positions.fold<double>(0, (sum, position) => sum + position.netProfit);
+      final totalInvested =
+        positions.fold<double>(0, (sum, position) => sum + position.investedCapital);
+      final totalNetPercent = totalInvested == 0
+        ? null
+        : (totalNetProfit / totalInvested) * 100;
             final totalTodayProfit =
                 positions.fold<double>(0, (sum, position) => sum + (position.todayProfit ?? 0));
             final totalTodayPercent = _weightedChangePercentForPositions(positions);
@@ -937,8 +952,8 @@ class _HoldingsSection extends StatelessWidget {
                 _HoldingsSummary(
                   marketValue: totalMarketValue,
                   costBasis: totalCostBasis,
-                  unrealizedProfit: totalUnrealized,
-                  unrealizedPercent: totalUnrealizedPercent,
+          netProfit: totalNetProfit,
+          netPercent: totalNetPercent,
                   todayProfit: totalTodayProfit,
                   todayPercent: totalTodayPercent,
                   holdingsCount: positions.length,
@@ -972,8 +987,8 @@ class _HoldingsSummary extends StatelessWidget {
   const _HoldingsSummary({
     required this.marketValue,
     required this.costBasis,
-    required this.unrealizedProfit,
-    required this.unrealizedPercent,
+    required this.netProfit,
+    required this.netPercent,
     required this.todayProfit,
     required this.todayPercent,
     required this.holdingsCount,
@@ -981,8 +996,8 @@ class _HoldingsSummary extends StatelessWidget {
 
   final double marketValue;
   final double costBasis;
-  final double unrealizedProfit;
-  final double? unrealizedPercent;
+  final double netProfit;
+  final double? netPercent;
   final double todayProfit;
   final double? todayPercent;
   final int holdingsCount;
@@ -991,8 +1006,8 @@ class _HoldingsSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
     final secondaryColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
-    
-    final unrealizedColor = _resolveChangeColor(unrealizedProfit);
+
+    final netColor = _resolveChangeColor(netProfit);
     final todayColor = _resolveChangeColor(todayProfit);
 
     String formatCurrency(double value) {
@@ -1022,7 +1037,7 @@ class _HoldingsSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // 第一行：成本、未实现盈亏、未实现收益率
+          // 第一行：成本、总盈亏、总收益率
           Row(
             children: [
               Expanded(
@@ -1033,18 +1048,18 @@ class _HoldingsSummary extends StatelessWidget {
               ),
               Expanded(
                 child: _CompactMetric(
-                  label: '未实现盈亏',
-                  value: '${unrealizedProfit >= 0 ? '+' : ''}${formatCurrency(unrealizedProfit)}',
-                  valueColor: CupertinoDynamicColor.resolve(unrealizedColor, context),
+                  label: '总盈亏',
+                  value: '${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit)}',
+                  valueColor: CupertinoDynamicColor.resolve(netColor, context),
                 ),
               ),
               Expanded(
                 child: _CompactMetric(
-                  label: '未实现收益率',
-                  value: unrealizedPercent != null 
-                    ? '${unrealizedPercent! >= 0 ? '+' : ''}${unrealizedPercent!.toStringAsFixed(2)}%'
+                  label: '总收益率',
+                  value: netPercent != null 
+                    ? '${netPercent! >= 0 ? '+' : ''}${netPercent!.toStringAsFixed(2)}%'
                     : '--',
-                  valueColor: CupertinoDynamicColor.resolve(unrealizedColor, context),
+                  valueColor: CupertinoDynamicColor.resolve(netColor, context),
                 ),
               ),
             ],
@@ -1146,9 +1161,9 @@ class _HoldingCard extends StatelessWidget {
     final latestPriceText = position.latestPrice != null
         ? '¥${position.latestPrice!.toStringAsFixed(2)}'
         : '--';
-    final cumulativeChange = _formatChange(position.unrealizedProfit, position.unrealizedPercent);
+    final netChange = _formatChange(position.netProfit, position.netPercent);
     final dailyChange = _formatChange(position.todayProfit, position.todayProfitPercent);
-    final profitColor = _resolveChangeColor(position.unrealizedProfit);
+    final profitColor = _resolveChangeColor(position.netProfit);
     final todayColor = _resolveChangeColor(position.todayProfit);
 
     return GestureDetector(
@@ -1227,8 +1242,8 @@ class _HoldingCard extends StatelessWidget {
                   _HoldingMetric(label: '现价', value: latestPriceText),
                   _HoldingMetric(label: '持仓占比', value: shareText),
                   _HoldingMetric(
-                    label: '未实现盈亏',
-                    value: cumulativeChange,
+                    label: '总盈亏',
+                    value: netChange,
                     valueColor: profitColor,
                     emphasize: true,
                   ),

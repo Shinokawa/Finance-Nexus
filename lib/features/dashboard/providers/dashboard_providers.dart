@@ -24,6 +24,7 @@ class DashboardData {
     required this.accountRows,
     required this.portfolioSnapshots,
     required this.accountSnapshots,
+    required this.currentMonthExpense,
   });
 
   final double totalNetWorth;
@@ -37,6 +38,7 @@ class DashboardData {
   final List<DashboardAssetRow> accountRows;
   final Map<String, PortfolioSnapshot> portfolioSnapshots;
   final Map<String, AccountSnapshot> accountSnapshots;
+  final double currentMonthExpense;
 
   double get totalNetProfit =>
       totalUnrealizedProfit + totalRealizedProfit - totalTradingCost;
@@ -145,10 +147,20 @@ class AccountSnapshot {
 }
 
 final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) async {
+  final now = DateTime.now();
+  final monthStart = DateTime(now.year, now.month, 1);
+
   final accounts = await ref.watch(accountsStreamProvider.future);
   final portfolios = await ref.watch(portfoliosStreamProvider.future);
   final positions = await ref.watch(holdingPositionsProvider.future);
   final transactions = await ref.watch(transactionsStreamProvider.future);
+
+  final currentMonthExpense = transactions.where((transaction) {
+    if (transaction.type != TransactionType.expense) {
+      return false;
+    }
+    return !transaction.date.isBefore(monthStart);
+  }).fold<double>(0, (sum, txn) => sum + txn.amount.abs());
 
   final accountMap = {for (final account in accounts) account.id: account};
   final positionsByPortfolio = groupBy(positions, (HoldingPosition position) => position.portfolio.id);
@@ -387,6 +399,7 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
     accountRows: accountRows,
     portfolioSnapshots: portfolioSnapshots,
     accountSnapshots: accountSnapshots,
+    currentMonthExpense: currentMonthExpense,
   );
 });
 

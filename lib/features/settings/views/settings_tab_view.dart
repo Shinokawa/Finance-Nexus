@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../design/design_system.dart';
 import '../../../providers/app_settings_provider.dart';
@@ -9,6 +9,35 @@ import '../widgets/backend_config_section.dart';
 
 class SettingsTabView extends ConsumerWidget {
   const SettingsTabView({super.key});
+
+  Future<void> _openProjectSite(BuildContext context) async {
+    const projectUrl = 'https://github.com/Shinokawa/Finance-Nexus';
+    final uri = Uri.parse(projectUrl);
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched) {
+      return;
+    }
+
+    if (context is Element && context.mounted) {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: const Text('无法打开链接'),
+          content: const Text('请在浏览器中访问以下地址：\nhttps://github.com/Shinokawa/Finance-Nexus'),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
+              child: const Text('好的'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   void _showThemeModePicker(
     BuildContext context,
@@ -213,6 +242,12 @@ class SettingsTabView extends ConsumerWidget {
                           ),
                         );
                       },
+                    ),
+                    _SettingsListTile(
+                      title: '项目主页',
+                      trailing: 'GitHub',
+                      showArrow: true,
+                      onTap: () => _openProjectSite(context),
                     ),
                     _SettingsListTile(
                       title: '开源许可',

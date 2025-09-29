@@ -130,7 +130,7 @@ class _SummarySection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '上一周期（前 90 天）',
+                    '上一周期（前 30 天）',
                     style: QHTypography.footnote.copyWith(color: label),
                   ),
                   const SizedBox(height: 4),

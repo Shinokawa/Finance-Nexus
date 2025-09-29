@@ -7,12 +7,18 @@ class HoldingPosition {
     required this.account,
     required this.portfolio,
     required this.quote,
+    this.realizedProfit = 0,
+    this.tradingCost = 0,
+    this.totalBuyAmount,
   });
 
   final Holding holding;
   final Account account;
   final Portfolio portfolio;
   final QuoteSnapshot? quote;
+  final double realizedProfit;
+  final double tradingCost;
+  final double? totalBuyAmount;
 
   double get quantity => holding.quantity;
   double get averageCost => holding.averageCost;
@@ -58,6 +64,18 @@ class HoldingPosition {
   }
 
   double get unrealizedProfit => marketValue - costBasis;
+
+  double get netProfit => unrealizedProfit + realizedProfit - tradingCost;
+
+  double get investedCapital => totalBuyAmount ?? costBasis;
+
+  double? get netPercent {
+    final capital = investedCapital;
+    if (capital == 0) {
+      return null;
+    }
+    return (netProfit / capital) * 100;
+  }
 
   double? get unrealizedPercent {
     final basis = costBasis;

@@ -291,8 +291,8 @@ class _AccountCard extends ConsumerWidget {
 
     // 获取账户快照数据
     final snapshot = dashboardAsync.valueOrNull?.accountSnapshots[account.id];
-    final totalValue = snapshot?.totalValue ?? account.balance;
-    final unrealizedProfit = snapshot?.unrealizedProfit;
+  final totalValue = snapshot?.totalValue ?? account.balance;
+  final netProfit = snapshot?.netProfit;
     final todayProfit = snapshot?.todayProfit;
 
     return GestureDetector(
@@ -346,12 +346,12 @@ class _AccountCard extends ConsumerWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (account.type == AccountType.investment && unrealizedProfit != null) ...[
+                    if (account.type == AccountType.investment && netProfit != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        _formatSignedCurrency(unrealizedProfit),
+                        _formatSignedCurrency(netProfit),
                         style: QHTypography.footnote.copyWith(
-                          color: _resolveChangeColor(unrealizedProfit),
+                          color: _resolveChangeColor(netProfit),
                         ),
                       ),
                     ],
@@ -497,7 +497,7 @@ class _PortfolioCard extends ConsumerWidget {
     // 获取组合快照数据
     final snapshot = dashboardAsync.valueOrNull?.portfolioSnapshots[portfolio.id];
     final marketValue = snapshot?.marketValue ?? 0.0;
-    final unrealizedProfit = snapshot?.unrealizedProfit;
+  final netProfit = snapshot?.netProfit;
     final todayProfit = snapshot?.todayProfit;
     final holdingsCount = snapshot?.holdingsCount ?? 0;
 
@@ -565,12 +565,12 @@ class _PortfolioCard extends ConsumerWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (unrealizedProfit != null) ...[
+                    if (netProfit != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        _formatSignedCurrency(unrealizedProfit),
+                        _formatSignedCurrency(netProfit),
                         style: QHTypography.footnote.copyWith(
-                          color: _resolveChangeColor(unrealizedProfit),
+                          color: _resolveChangeColor(netProfit),
                         ),
                       ),
                     ],
