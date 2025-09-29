@@ -242,13 +242,8 @@ class _HoldingContent extends StatelessWidget {
             _buildInfoGrid([
               _InfoPair(label: '组合', value: position.portfolio.name),
               _InfoPair(label: '账户', value: position.account.name),
-              _InfoPair(label: '持仓数量', value: _formatQuantity(position.quantity)),
-              _InfoPair(label: '平均成本', value: '¥${position.averageCost.toStringAsFixed(4)}'),
-              _InfoPair(label: '总成本金额', value: _formatCurrency(position.costBasis)),
               _InfoPair(label: '当前市值', value: _formatCurrency(position.marketValue)),
             ]),
-            
-            // 行情信息
             const SizedBox(height: 24),
             _SectionHeader(title: '行情信息'),
             const SizedBox(height: 12),
@@ -281,13 +276,13 @@ class _HoldingContent extends StatelessWidget {
             const SizedBox(height: 12),
             _buildInfoGrid([
               _InfoPair(
-                label: '累计盈亏',
+                label: '未实现盈亏',
                 value: _formatSignedCurrency(position.unrealizedProfit),
                 isProfit: position.unrealizedProfit >= 0,
               ),
               if (position.unrealizedPercent != null)
                 _InfoPair(
-                  label: '累计收益率',
+                  label: '未实现收益率',
                   value: _formatSignedPercent(position.unrealizedPercent),
                   isProfit: position.unrealizedPercent! >= 0,
                 ),
@@ -378,14 +373,30 @@ class _PortfolioOverviewCard extends StatelessWidget {
               children: [
                 _MiniMetric(label: '组合成本', value: _formatCurrency(snapshot.costBasis)),
                 _MiniMetric(
-                  label: '累计盈亏',
+                  label: '总盈亏',
+                  value: _formatChange(
+                    snapshot.netProfit,
+                    snapshot.costBasis == 0 ? null : (snapshot.netProfit / snapshot.costBasis) * 100,
+                  ),
+                  valueColor: _resolveChangeColor(snapshot.netProfit),
+                ),
+                _MiniMetric(
+                  label: '已实现盈亏',
+                  value: _formatChange(
+                    snapshot.realizedProfit,
+                    snapshot.costBasis == 0 ? null : (snapshot.realizedProfit / snapshot.costBasis) * 100,
+                  ),
+                  valueColor: _resolveChangeColor(snapshot.realizedProfit),
+                ),
+                _MiniMetric(
+                  label: '未实现盈亏',
                   value: _formatChange(snapshot.unrealizedProfit, snapshot.unrealizedPercent),
                   valueColor: _resolveChangeColor(snapshot.unrealizedProfit),
                 ),
                 _MiniMetric(
-                  label: '盈亏率',
-                  value: _formatSignedPercent(snapshot.unrealizedPercent),
-                  valueColor: _resolveChangeColor(snapshot.unrealizedProfit),
+                  label: '交易成本',
+                  value: _formatSignedCurrency(-snapshot.tradingCost),
+                  valueColor: _resolveChangeColor(-snapshot.tradingCost),
                 ),
                 _MiniMetric(
                   label: '今日盈亏',
@@ -432,14 +443,30 @@ class _AccountOverviewCard extends StatelessWidget {
         _MiniMetric(label: '持仓市值', value: _formatCurrency(snapshot.marketValue)),
         _MiniMetric(label: '账户现金', value: _formatCurrency(snapshot.cashBalance)),
         _MiniMetric(
-          label: '累计盈亏',
+          label: '总盈亏',
+          value: _formatChange(
+            snapshot.netProfit,
+            snapshot.costBasis == 0 ? null : (snapshot.netProfit / snapshot.costBasis) * 100,
+          ),
+          valueColor: _resolveChangeColor(snapshot.netProfit),
+        ),
+        _MiniMetric(
+          label: '已实现盈亏',
+          value: _formatChange(
+            snapshot.realizedProfit,
+            snapshot.costBasis == 0 ? null : (snapshot.realizedProfit / snapshot.costBasis) * 100,
+          ),
+          valueColor: _resolveChangeColor(snapshot.realizedProfit),
+        ),
+        _MiniMetric(
+          label: '未实现盈亏',
           value: _formatChange(snapshot.unrealizedProfit, snapshot.unrealizedPercent),
           valueColor: _resolveChangeColor(snapshot.unrealizedProfit),
         ),
         _MiniMetric(
-          label: '盈亏率',
-          value: _formatSignedPercent(snapshot.unrealizedPercent),
-          valueColor: _resolveChangeColor(snapshot.unrealizedProfit),
+          label: '交易成本',
+          value: _formatSignedCurrency(-snapshot.tradingCost),
+          valueColor: _resolveChangeColor(-snapshot.tradingCost),
         ),
         _MiniMetric(
           label: '今日盈亏',
@@ -568,12 +595,12 @@ class _HoldingOverviewCard extends StatelessWidget {
                 _MiniMetric(label: '持仓数量', value: _formatQuantity(position.quantity)),
                 _MiniMetric(label: '总成本', value: _formatCurrency(position.costBasis)),
                 _MiniMetric(
-                  label: '累计盈亏',
+                  label: '未实现盈亏',
                   value: _formatSignedCurrency(position.unrealizedProfit), // 只显示金额，不显示百分比
                   valueColor: _resolveChangeColor(position.unrealizedProfit),
                 ),
                 _MiniMetric(
-                  label: '盈亏率',
+                  label: '未实现收益率',
                   value: _formatSignedPercent(position.unrealizedPercent),
                   valueColor: _resolveChangeColor(position.unrealizedProfit),
                 ),
@@ -996,12 +1023,12 @@ class _HoldingBreakdownCard extends StatelessWidget {
               children: [
                 _MiniMetric(label: '总成本', value: _formatCurrency(position.costBasis)),
                 _MiniMetric(
-                  label: '累计盈亏',
+                  label: '未实现盈亏',
                   value: _formatChange(position.unrealizedProfit, position.unrealizedPercent),
                   valueColor: profitColor,
                 ),
                 _MiniMetric(
-                  label: '盈亏率',
+                  label: '未实现收益率',
                   value: _formatSignedPercent(position.unrealizedPercent),
                   valueColor: profitColor,
                 ),

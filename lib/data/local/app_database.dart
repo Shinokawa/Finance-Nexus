@@ -29,6 +29,10 @@ class Accounts extends Table {
 
   RealColumn get balance => real().withDefault(const Constant(0.0))();
 
+  RealColumn get commissionRate => real().withDefault(const Constant(0.0003))();
+
+  RealColumn get stampTaxRate => real().withDefault(const Constant(0.001))();
+
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now())();
 }
@@ -121,7 +125,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -131,6 +135,14 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.addColumn(holdings, holdings.purchaseDate);
+          }
+          if (from < 3) {
+            await m.database.customStatement(
+              'ALTER TABLE accounts ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0.0003',
+            );
+            await m.database.customStatement(
+              'ALTER TABLE accounts ADD COLUMN stamp_tax_rate REAL NOT NULL DEFAULT 0.001',
+            );
           }
         },
       );

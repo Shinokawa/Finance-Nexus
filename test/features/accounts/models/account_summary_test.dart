@@ -12,6 +12,8 @@ void main() {
         type: AccountType.investment,
         currency: AccountCurrency.cny,
         balance: 50000.0,
+        commissionRate: 0,
+        stampTaxRate: 0,
         createdAt: DateTime.now(),
       );
       
@@ -21,8 +23,8 @@ void main() {
       );
       
       expect(summary.isInvestment, true);
-      expect(summary.effectiveBalance, 80000.0); // 应该返回持仓价值
-      expect(summary.displayBalance, 80000.0);
+  expect(summary.effectiveBalance, 130000.0); // 持仓市值 + 现金余额
+  expect(summary.displayBalance, 130000.0);
     });
     
     test('should calculate effective balance correctly for cash account', () {
@@ -32,6 +34,8 @@ void main() {
         type: AccountType.cash,
         currency: AccountCurrency.cny,
         balance: 30000.0,
+        commissionRate: 0,
+        stampTaxRate: 0,
         createdAt: DateTime.now(),
       );
       
@@ -53,6 +57,8 @@ void main() {
         type: AccountType.liability,
         currency: AccountCurrency.cny,
         balance: 15000.0, // 正数表示欠款
+        commissionRate: 0,
+        stampTaxRate: 0,
         createdAt: DateTime.now(),
       );
       

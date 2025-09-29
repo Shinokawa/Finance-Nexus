@@ -263,10 +263,14 @@ class _TotalNetWorthCard extends ConsumerWidget {
       context,
     );
     
-    final totalReturnPercent = data.totalCostBasis == 0
-        ? null
-        : (data.totalUnrealizedProfit / data.totalCostBasis) * 100;
-    final cumulativeColor = _resolveChangeColor(data.totalUnrealizedProfit);
+  final totalNetProfit = data.totalNetProfit;
+  final totalReturnPercent = data.totalCostBasis == 0
+    ? null
+    : (totalNetProfit / data.totalCostBasis) * 100;
+  final cumulativeColor = _resolveChangeColor(totalNetProfit);
+  final realizedColor = _resolveChangeColor(data.totalRealizedProfit);
+  final unrealizedColor = _resolveChangeColor(data.totalUnrealizedProfit);
+  final tradingCostColor = _resolveChangeColor(-data.totalTradingCost);
     final todayColor = _resolveChangeColor(data.todayChange);
     
     // 计算资产分布
@@ -371,12 +375,36 @@ class _TotalNetWorthCard extends ConsumerWidget {
                 subtitle: null,
               ),
               _NetWorthMetric(
-                label: '累计盈亏',
-                value: _formatSignedCurrency(data.totalUnrealizedProfit),
+                label: '总盈亏',
+                value: _formatSignedCurrency(totalNetProfit),
                 color: cumulativeColor,
-                subtitle: totalReturnPercent != null 
+                subtitle: totalReturnPercent != null
                     ? _formatSignedPercent(totalReturnPercent)
                     : null,
+              ),
+              _NetWorthMetric(
+                label: '已实现盈亏',
+                value: _formatSignedCurrency(data.totalRealizedProfit),
+                color: realizedColor,
+                subtitle: data.totalCostBasis == 0
+                    ? null
+                    : _formatSignedPercent((data.totalRealizedProfit / data.totalCostBasis) * 100),
+              ),
+              _NetWorthMetric(
+                label: '未实现盈亏',
+                value: _formatSignedCurrency(data.totalUnrealizedProfit),
+                color: unrealizedColor,
+                subtitle: data.totalCostBasis == 0
+                    ? null
+                    : _formatSignedPercent((data.totalUnrealizedProfit / data.totalCostBasis) * 100),
+              ),
+              _NetWorthMetric(
+                label: '交易成本',
+                value: _formatSignedCurrency(-data.totalTradingCost),
+                color: tradingCostColor,
+                subtitle: data.totalCostBasis == 0
+                    ? null
+                    : _formatSignedPercent((-data.totalTradingCost / data.totalCostBasis) * 100),
               ),
             ],
           ),
@@ -406,7 +434,9 @@ class _DashboardAssetCard extends StatelessWidget {
     final secondary = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
     final tertiary = CupertinoDynamicColor.resolve(CupertinoColors.tertiaryLabel, context);
     final accent = _resolveAccentColor(context);
-    final cumulativeText = _formatChange(row.unrealizedProfit, row.unrealizedPercent);
+  final netPercent = row.costBasis == 0 ? null : (row.netProfit / row.costBasis) * 100;
+  final netText = _formatChange(row.netProfit, netPercent);
+  final cumulativeText = _formatChange(row.unrealizedProfit, row.unrealizedPercent);
     final todayText = _formatChange(row.todayProfit, row.todayProfitPercent);
     final costText = _formatCurrency(row.costBasis);
     final shareText = _formatShare(row.share);
@@ -478,9 +508,24 @@ class _DashboardAssetCard extends StatelessWidget {
                 runSpacing: 12,
                 children: [
                   _MetricPill(
-                    label: '累计盈亏',
+                    label: '总盈亏',
+                    value: netText,
+                    color: _resolveChangeColor(row.netProfit),
+                  ),
+                  _MetricPill(
+                    label: '未实现盈亏',
                     value: cumulativeText,
                     color: _resolveChangeColor(row.unrealizedProfit),
+                  ),
+                  _MetricPill(
+                    label: '已实现盈亏',
+                    value: _formatSignedCurrency(row.realizedProfit),
+                    color: _resolveChangeColor(row.realizedProfit),
+                  ),
+                  _MetricPill(
+                    label: '交易成本',
+                    value: _formatSignedCurrency(-row.tradingCost),
+                    color: _resolveChangeColor(-row.tradingCost),
                   ),
                   _MetricPill(
                     label: '今日盈亏',
@@ -977,7 +1022,7 @@ class _HoldingsSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // 第一行：成本、累计盈亏、盈亏率
+          // 第一行：成本、未实现盈亏、未实现收益率
           Row(
             children: [
               Expanded(
@@ -988,14 +1033,14 @@ class _HoldingsSummary extends StatelessWidget {
               ),
               Expanded(
                 child: _CompactMetric(
-                  label: '累计盈亏',
+                  label: '未实现盈亏',
                   value: '${unrealizedProfit >= 0 ? '+' : ''}${formatCurrency(unrealizedProfit)}',
                   valueColor: CupertinoDynamicColor.resolve(unrealizedColor, context),
                 ),
               ),
               Expanded(
                 child: _CompactMetric(
-                  label: '盈亏率',
+                  label: '未实现收益率',
                   value: unrealizedPercent != null 
                     ? '${unrealizedPercent! >= 0 ? '+' : ''}${unrealizedPercent!.toStringAsFixed(2)}%'
                     : '--',
@@ -1182,7 +1227,7 @@ class _HoldingCard extends StatelessWidget {
                   _HoldingMetric(label: '现价', value: latestPriceText),
                   _HoldingMetric(label: '持仓占比', value: shareText),
                   _HoldingMetric(
-                    label: '累计盈亏',
+                    label: '未实现盈亏',
                     value: cumulativeChange,
                     valueColor: profitColor,
                     emphasize: true,

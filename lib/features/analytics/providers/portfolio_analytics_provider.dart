@@ -7,7 +7,7 @@ import '../../../providers/net_worth_range_state.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/forecast_projection_service.dart';
 import '../../accounts/providers/account_summary_providers.dart';
-import '../../ledger/views/ledger_tab_view.dart';
+import '../../ledger/providers/transaction_providers.dart';
 import '../models/analytics_models.dart';
 
 final portfolioAnalyticsServiceProvider = Provider<PortfolioAnalyticsService>((ref) {

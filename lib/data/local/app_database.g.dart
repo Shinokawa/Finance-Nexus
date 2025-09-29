@@ -58,6 +58,30 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0.0),
   );
+  static const VerificationMeta _commissionRateMeta = const VerificationMeta(
+    'commissionRate',
+  );
+  @override
+  late final GeneratedColumn<double> commissionRate = GeneratedColumn<double>(
+    'commission_rate',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0003),
+  );
+  static const VerificationMeta _stampTaxRateMeta = const VerificationMeta(
+    'stampTaxRate',
+  );
+  @override
+  late final GeneratedColumn<double> stampTaxRate = GeneratedColumn<double>(
+    'stamp_tax_rate',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.001),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -77,6 +101,8 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     type,
     currency,
     balance,
+    commissionRate,
+    stampTaxRate,
     createdAt,
   ];
   @override
@@ -106,6 +132,24 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
       context.handle(
         _balanceMeta,
         balance.isAcceptableOrUnknown(data['balance']!, _balanceMeta),
+      );
+    }
+    if (data.containsKey('commission_rate')) {
+      context.handle(
+        _commissionRateMeta,
+        commissionRate.isAcceptableOrUnknown(
+          data['commission_rate']!,
+          _commissionRateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stamp_tax_rate')) {
+      context.handle(
+        _stampTaxRateMeta,
+        stampTaxRate.isAcceptableOrUnknown(
+          data['stamp_tax_rate']!,
+          _stampTaxRateMeta,
+        ),
       );
     }
     if (data.containsKey('created_at')) {
@@ -147,6 +191,14 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         DriftSqlType.double,
         data['${effectivePrefix}balance'],
       )!,
+      commissionRate: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}commission_rate'],
+      )!,
+      stampTaxRate: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}stamp_tax_rate'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -171,6 +223,8 @@ class Account extends DataClass implements Insertable<Account> {
   final AccountType type;
   final AccountCurrency currency;
   final double balance;
+  final double commissionRate;
+  final double stampTaxRate;
   final DateTime createdAt;
   const Account({
     required this.id,
@@ -178,6 +232,8 @@ class Account extends DataClass implements Insertable<Account> {
     required this.type,
     required this.currency,
     required this.balance,
+    required this.commissionRate,
+    required this.stampTaxRate,
     required this.createdAt,
   });
   @override
@@ -194,6 +250,8 @@ class Account extends DataClass implements Insertable<Account> {
       );
     }
     map['balance'] = Variable<double>(balance);
+    map['commission_rate'] = Variable<double>(commissionRate);
+    map['stamp_tax_rate'] = Variable<double>(stampTaxRate);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -205,6 +263,8 @@ class Account extends DataClass implements Insertable<Account> {
       type: Value(type),
       currency: Value(currency),
       balance: Value(balance),
+      commissionRate: Value(commissionRate),
+      stampTaxRate: Value(stampTaxRate),
       createdAt: Value(createdAt),
     );
   }
@@ -220,6 +280,8 @@ class Account extends DataClass implements Insertable<Account> {
       type: serializer.fromJson<AccountType>(json['type']),
       currency: serializer.fromJson<AccountCurrency>(json['currency']),
       balance: serializer.fromJson<double>(json['balance']),
+      commissionRate: serializer.fromJson<double>(json['commissionRate']),
+      stampTaxRate: serializer.fromJson<double>(json['stampTaxRate']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -232,6 +294,8 @@ class Account extends DataClass implements Insertable<Account> {
       'type': serializer.toJson<AccountType>(type),
       'currency': serializer.toJson<AccountCurrency>(currency),
       'balance': serializer.toJson<double>(balance),
+      'commissionRate': serializer.toJson<double>(commissionRate),
+      'stampTaxRate': serializer.toJson<double>(stampTaxRate),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -242,6 +306,8 @@ class Account extends DataClass implements Insertable<Account> {
     AccountType? type,
     AccountCurrency? currency,
     double? balance,
+    double? commissionRate,
+    double? stampTaxRate,
     DateTime? createdAt,
   }) => Account(
     id: id ?? this.id,
@@ -249,6 +315,8 @@ class Account extends DataClass implements Insertable<Account> {
     type: type ?? this.type,
     currency: currency ?? this.currency,
     balance: balance ?? this.balance,
+    commissionRate: commissionRate ?? this.commissionRate,
+    stampTaxRate: stampTaxRate ?? this.stampTaxRate,
     createdAt: createdAt ?? this.createdAt,
   );
   Account copyWithCompanion(AccountsCompanion data) {
@@ -258,6 +326,12 @@ class Account extends DataClass implements Insertable<Account> {
       type: data.type.present ? data.type.value : this.type,
       currency: data.currency.present ? data.currency.value : this.currency,
       balance: data.balance.present ? data.balance.value : this.balance,
+      commissionRate: data.commissionRate.present
+          ? data.commissionRate.value
+          : this.commissionRate,
+      stampTaxRate: data.stampTaxRate.present
+          ? data.stampTaxRate.value
+          : this.stampTaxRate,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -270,13 +344,24 @@ class Account extends DataClass implements Insertable<Account> {
           ..write('type: $type, ')
           ..write('currency: $currency, ')
           ..write('balance: $balance, ')
+          ..write('commissionRate: $commissionRate, ')
+          ..write('stampTaxRate: $stampTaxRate, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, type, currency, balance, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    type,
+    currency,
+    balance,
+    commissionRate,
+    stampTaxRate,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -286,6 +371,8 @@ class Account extends DataClass implements Insertable<Account> {
           other.type == this.type &&
           other.currency == this.currency &&
           other.balance == this.balance &&
+          other.commissionRate == this.commissionRate &&
+          other.stampTaxRate == this.stampTaxRate &&
           other.createdAt == this.createdAt);
 }
 
@@ -295,6 +382,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<AccountType> type;
   final Value<AccountCurrency> currency;
   final Value<double> balance;
+  final Value<double> commissionRate;
+  final Value<double> stampTaxRate;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const AccountsCompanion({
@@ -303,6 +392,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     this.type = const Value.absent(),
     this.currency = const Value.absent(),
     this.balance = const Value.absent(),
+    this.commissionRate = const Value.absent(),
+    this.stampTaxRate = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -312,6 +403,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     required AccountType type,
     this.currency = const Value.absent(),
     this.balance = const Value.absent(),
+    this.commissionRate = const Value.absent(),
+    this.stampTaxRate = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : name = Value(name),
@@ -322,6 +415,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Expression<String>? type,
     Expression<String>? currency,
     Expression<double>? balance,
+    Expression<double>? commissionRate,
+    Expression<double>? stampTaxRate,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -331,6 +426,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       if (type != null) 'type': type,
       if (currency != null) 'currency': currency,
       if (balance != null) 'balance': balance,
+      if (commissionRate != null) 'commission_rate': commissionRate,
+      if (stampTaxRate != null) 'stamp_tax_rate': stampTaxRate,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -342,6 +439,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<AccountType>? type,
     Value<AccountCurrency>? currency,
     Value<double>? balance,
+    Value<double>? commissionRate,
+    Value<double>? stampTaxRate,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -351,6 +450,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       type: type ?? this.type,
       currency: currency ?? this.currency,
       balance: balance ?? this.balance,
+      commissionRate: commissionRate ?? this.commissionRate,
+      stampTaxRate: stampTaxRate ?? this.stampTaxRate,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -378,6 +479,12 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     if (balance.present) {
       map['balance'] = Variable<double>(balance.value);
     }
+    if (commissionRate.present) {
+      map['commission_rate'] = Variable<double>(commissionRate.value);
+    }
+    if (stampTaxRate.present) {
+      map['stamp_tax_rate'] = Variable<double>(stampTaxRate.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -395,6 +502,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
           ..write('type: $type, ')
           ..write('currency: $currency, ')
           ..write('balance: $balance, ')
+          ..write('commissionRate: $commissionRate, ')
+          ..write('stampTaxRate: $stampTaxRate, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -1805,6 +1914,8 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required AccountType type,
       Value<AccountCurrency> currency,
       Value<double> balance,
+      Value<double> commissionRate,
+      Value<double> stampTaxRate,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -1815,6 +1926,8 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<AccountType> type,
       Value<AccountCurrency> currency,
       Value<double> balance,
+      Value<double> commissionRate,
+      Value<double> stampTaxRate,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -1922,6 +2035,16 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<double> get balance => $composableBuilder(
     column: $table.balance,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get commissionRate => $composableBuilder(
+    column: $table.commissionRate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get stampTaxRate => $composableBuilder(
+    column: $table.stampTaxRate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2040,6 +2163,16 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get commissionRate => $composableBuilder(
+    column: $table.commissionRate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get stampTaxRate => $composableBuilder(
+    column: $table.stampTaxRate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2069,6 +2202,16 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<double> get balance =>
       $composableBuilder(column: $table.balance, builder: (column) => column);
+
+  GeneratedColumn<double> get commissionRate => $composableBuilder(
+    column: $table.commissionRate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get stampTaxRate => $composableBuilder(
+    column: $table.stampTaxRate,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2186,6 +2329,8 @@ class $$AccountsTableTableManager
                 Value<AccountType> type = const Value.absent(),
                 Value<AccountCurrency> currency = const Value.absent(),
                 Value<double> balance = const Value.absent(),
+                Value<double> commissionRate = const Value.absent(),
+                Value<double> stampTaxRate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AccountsCompanion(
@@ -2194,6 +2339,8 @@ class $$AccountsTableTableManager
                 type: type,
                 currency: currency,
                 balance: balance,
+                commissionRate: commissionRate,
+                stampTaxRate: stampTaxRate,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -2204,6 +2351,8 @@ class $$AccountsTableTableManager
                 required AccountType type,
                 Value<AccountCurrency> currency = const Value.absent(),
                 Value<double> balance = const Value.absent(),
+                Value<double> commissionRate = const Value.absent(),
+                Value<double> stampTaxRate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AccountsCompanion.insert(
@@ -2212,6 +2361,8 @@ class $$AccountsTableTableManager
                 type: type,
                 currency: currency,
                 balance: balance,
+                commissionRate: commissionRate,
+                stampTaxRate: stampTaxRate,
                 createdAt: createdAt,
                 rowid: rowid,
               ),

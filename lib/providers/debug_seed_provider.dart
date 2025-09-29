@@ -34,6 +34,8 @@ final debugSeedProvider = FutureProvider<void>((ref) async {
       name: '华泰证券 · A股账户',
       type: AccountType.investment,
       balance: const Value(15000.0), // 扣除建仓成本后的剩余资金
+      commissionRate: const Value(0.0003),
+      stampTaxRate: const Value(0.0005),
     ),
   );
 

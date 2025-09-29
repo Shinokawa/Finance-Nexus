@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
 import '../../accounts/providers/account_summary_providers.dart';
+import '../../ledger/providers/transaction_providers.dart';
 import '../models/holding_position.dart';
 import 'holding_positions_provider.dart';
 
@@ -12,6 +15,8 @@ class DashboardData {
     required this.totalNetWorth,
     required this.totalCostBasis,
     required this.totalUnrealizedProfit,
+    required this.totalRealizedProfit,
+    required this.totalTradingCost,
     required this.todayChange,
     required this.todayChangePercent,
     required this.portfolioRows,
@@ -23,12 +28,17 @@ class DashboardData {
   final double totalNetWorth;
   final double totalCostBasis;
   final double totalUnrealizedProfit;
+  final double totalRealizedProfit;
+  final double totalTradingCost;
   final double todayChange;
   final double todayChangePercent;
   final List<DashboardAssetRow> portfolioRows;
   final List<DashboardAssetRow> accountRows;
   final Map<String, PortfolioSnapshot> portfolioSnapshots;
   final Map<String, AccountSnapshot> accountSnapshots;
+
+  double get totalNetProfit =>
+      totalUnrealizedProfit + totalRealizedProfit - totalTradingCost;
 }
 
 class DashboardAssetRow {
@@ -40,6 +50,8 @@ class DashboardAssetRow {
     required this.costBasis,
     required this.unrealizedProfit,
     required this.unrealizedPercent,
+  required this.realizedProfit,
+  required this.tradingCost,
     required this.todayProfit,
     required this.todayProfitPercent,
     required this.share,
@@ -55,12 +67,16 @@ class DashboardAssetRow {
   final double costBasis;
   final double unrealizedProfit;
   final double? unrealizedPercent;
+  final double realizedProfit;
+  final double tradingCost;
   final double todayProfit;
   final double? todayProfitPercent;
   final double share;
   final AccountType? category;
   final int holdingsCount;
   final double? cashBalance;
+
+  double get netProfit => unrealizedProfit + realizedProfit - tradingCost;
 }
 
 class PortfolioSnapshot {
@@ -71,6 +87,8 @@ class PortfolioSnapshot {
     required this.costBasis,
     required this.unrealizedProfit,
     required this.unrealizedPercent,
+    required this.realizedProfit,
+    required this.tradingCost,
     required this.todayProfit,
     required this.todayProfitPercent,
   });
@@ -81,10 +99,14 @@ class PortfolioSnapshot {
   final double costBasis;
   final double unrealizedProfit;
   final double? unrealizedPercent;
+  final double realizedProfit;
+  final double tradingCost;
   final double todayProfit;
   final double? todayProfitPercent;
 
   int get holdingsCount => positions.length;
+
+  double get netProfit => unrealizedProfit + realizedProfit - tradingCost;
 }
 
 class AccountSnapshot {
@@ -96,6 +118,8 @@ class AccountSnapshot {
     required this.costBasis,
     required this.unrealizedProfit,
     required this.unrealizedPercent,
+    required this.realizedProfit,
+    required this.tradingCost,
     required this.todayProfit,
     required this.todayProfitPercent,
     required this.cashBalance,
@@ -108,23 +132,82 @@ class AccountSnapshot {
   final double costBasis;
   final double unrealizedProfit;
   final double? unrealizedPercent;
+  final double realizedProfit;
+  final double tradingCost;
   final double todayProfit;
   final double? todayProfitPercent;
   final double cashBalance;
 
   int get holdingsCount => positions.length;
+
+  double get netProfit => unrealizedProfit + realizedProfit - tradingCost;
 }
 
 final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) async {
   final accounts = await ref.watch(accountsStreamProvider.future);
   final portfolios = await ref.watch(portfoliosStreamProvider.future);
   final positions = await ref.watch(holdingPositionsProvider.future);
+  final transactions = await ref.watch(transactionsStreamProvider.future);
 
+  final accountMap = {for (final account in accounts) account.id: account};
   final positionsByPortfolio = groupBy(positions, (HoldingPosition position) => position.portfolio.id);
   final positionsByAccount = groupBy(positions, (HoldingPosition position) => position.account.id);
+  final positionsByHoldingId = {
+    for (final position in positions) position.holding.id: position,
+  };
 
   final totalHoldingsCost = positions.fold<double>(0, (sum, position) => sum + position.costBasis);
   final totalHoldingsTodayProfit = positions.fold<double>(0, (sum, position) => sum + (position.todayProfit ?? 0));
+
+  final tradesByAccount = <String, _TradeAggregation>{};
+  final tradesByPortfolio = <String, _TradeAggregation>{};
+  final totalTrades = _TradeAggregation();
+
+  for (final transaction in transactions) {
+    if (transaction.type != TransactionType.buy && transaction.type != TransactionType.sell) {
+      continue;
+    }
+
+    final accountId = transaction.type == TransactionType.buy
+        ? transaction.fromAccountId
+        : transaction.toAccountId;
+    if (accountId == null) {
+      continue;
+    }
+    final account = accountMap[accountId];
+    if (account == null || account.type != AccountType.investment) {
+      continue;
+    }
+
+    final amount = transaction.amount.abs();
+    final commission = amount * account.commissionRate;
+    final stampTax = transaction.type == TransactionType.sell ? amount * account.stampTaxRate : 0.0;
+
+    final accountTrades = tradesByAccount.putIfAbsent(accountId, _TradeAggregation.new);
+    if (transaction.type == TransactionType.buy) {
+      accountTrades.addBuy(amount, commission);
+      totalTrades.addBuy(amount, commission);
+    } else {
+      accountTrades.addSell(amount, commission, stampTax);
+      totalTrades.addSell(amount, commission, stampTax);
+    }
+
+    final holdingId = transaction.relatedHoldingId;
+    if (holdingId == null) {
+      continue;
+    }
+    final position = positionsByHoldingId[holdingId];
+    if (position == null) {
+      continue;
+    }
+    final portfolioId = position.portfolio.id;
+    final portfolioTrades = tradesByPortfolio.putIfAbsent(portfolioId, _TradeAggregation.new);
+    if (transaction.type == TransactionType.buy) {
+      portfolioTrades.addBuy(amount, commission);
+    } else {
+      portfolioTrades.addSell(amount, commission, stampTax);
+    }
+  }
 
   double totalCashBalances = 0;
   double totalLiabilityPrincipal = 0;
@@ -138,7 +221,8 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
     final holdingsCost = _sumCostBasis(relatedPositions);
     final holdingsTodayProfit = _sumTodayProfit(relatedPositions);
     final holdingsUnrealizedProfit = holdingsMarketValue - holdingsCost;
-    final holdingsUnrealizedPercent = holdingsCost == 0 ? null : (holdingsUnrealizedProfit / holdingsCost) * 100;
+    final holdingsUnrealizedPercent =
+        holdingsCost == 0 ? null : (holdingsUnrealizedProfit / holdingsCost) * 100;
     final holdingsTodayPercent = _weightedChangePercent(relatedPositions);
 
     double contribution;
@@ -162,6 +246,12 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
 
     totalNetWorth += contribution;
 
+    final trades = tradesByAccount[account.id];
+    final realizedProfit = account.type == AccountType.investment
+        ? _calculateRealizedProfit(trades, holdingsCost)
+        : 0.0;
+    final tradingCost = account.type == AccountType.investment ? (trades?.tradingCost ?? 0.0) : 0.0;
+
     accountSnapshots[account.id] = AccountSnapshot(
       account: account,
       positions: relatedPositions,
@@ -174,6 +264,8 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
       },
       unrealizedProfit: account.type == AccountType.liability ? 0 : holdingsUnrealizedProfit,
       unrealizedPercent: account.type == AccountType.liability ? null : holdingsUnrealizedPercent,
+      realizedProfit: realizedProfit,
+      tradingCost: tradingCost,
       todayProfit: account.type == AccountType.liability ? 0 : holdingsTodayProfit,
       todayProfitPercent: account.type == AccountType.liability
           ? null
@@ -195,11 +287,15 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
     final unrealizedProfit = marketValue - costBasis;
     final unrealizedPercent = costBasis == 0 ? null : (unrealizedProfit / costBasis) * 100;
     final todayPercent = relatedPositions.isEmpty ? null : _weightedChangePercent(relatedPositions);
-  final share = totalNetWorth == 0 ? 0.0 : marketValue / totalNetWorth;
+    final share = totalNetWorth == 0 ? 0.0 : marketValue / totalNetWorth;
     final holdingsCount = relatedPositions.length;
     final subtitle = portfolio.description?.trim().isNotEmpty == true
         ? portfolio.description!.trim()
         : '持仓 $holdingsCount 项';
+
+    final trades = tradesByPortfolio[portfolio.id];
+    final realizedProfit = trades == null ? 0.0 : _calculateRealizedProfit(trades, costBasis);
+    final tradingCost = trades?.tradingCost ?? 0.0;
 
     portfolioRows.add(
       DashboardAssetRow(
@@ -210,6 +306,8 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
         costBasis: costBasis,
         unrealizedProfit: unrealizedProfit,
         unrealizedPercent: unrealizedPercent,
+        realizedProfit: realizedProfit,
+        tradingCost: tradingCost,
         todayProfit: todayProfit,
         todayProfitPercent: todayPercent,
         share: share,
@@ -224,6 +322,8 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
       costBasis: costBasis,
       unrealizedProfit: unrealizedProfit,
       unrealizedPercent: unrealizedPercent,
+      realizedProfit: realizedProfit,
+      tradingCost: tradingCost,
       todayProfit: todayProfit,
       todayProfitPercent: todayPercent,
     );
@@ -237,7 +337,11 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
       AccountType.cash => '现金账户',
       AccountType.liability => '负债账户',
     };
-  final share = totalNetWorth == 0 ? 0.0 : snapshot.totalValue / totalNetWorth;
+    final share = totalNetWorth == 0 ? 0.0 : snapshot.totalValue / totalNetWorth;
+
+    final costBasis = account.type == AccountType.investment
+        ? snapshot.costBasis + snapshot.cashBalance
+        : snapshot.costBasis;
 
     accountRows.add(
       DashboardAssetRow(
@@ -245,11 +349,11 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
         title: account.name,
         subtitle: subtitle,
         marketValue: snapshot.totalValue,
-        costBasis: account.type == AccountType.investment
-            ? snapshot.costBasis + snapshot.cashBalance
-            : snapshot.costBasis,
+        costBasis: costBasis,
         unrealizedProfit: snapshot.unrealizedProfit,
         unrealizedPercent: snapshot.unrealizedPercent,
+        realizedProfit: account.type == AccountType.investment ? snapshot.realizedProfit : 0.0,
+        tradingCost: account.type == AccountType.investment ? snapshot.tradingCost : 0.0,
         todayProfit: snapshot.todayProfit,
         todayProfitPercent: snapshot.todayProfitPercent,
         share: share,
@@ -262,9 +366,10 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
 
   final totalCostBasis = totalCashBalances + totalHoldingsCost - totalLiabilityPrincipal;
   final totalUnrealizedProfit = totalNetWorth - totalCostBasis;
-  final totalTodayChangePercent = totalNetWorth == 0
-      ? 0.0
-      : (totalHoldingsTodayProfit / totalNetWorth) * 100;
+  final totalRealizedProfit = _calculateRealizedProfit(totalTrades, totalHoldingsCost);
+  final totalTradingCost = totalTrades.tradingCost;
+  final totalTodayChangePercent =
+      totalNetWorth == 0 ? 0.0 : (totalHoldingsTodayProfit / totalNetWorth) * 100;
 
   portfolioRows.sort((a, b) => b.marketValue.compareTo(a.marketValue));
   accountRows.sort((a, b) => b.marketValue.compareTo(a.marketValue));
@@ -273,6 +378,8 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
     totalNetWorth: totalNetWorth,
     totalCostBasis: totalCostBasis,
     totalUnrealizedProfit: totalUnrealizedProfit,
+    totalRealizedProfit: totalRealizedProfit,
+    totalTradingCost: totalTradingCost,
     todayChange: totalHoldingsTodayProfit,
     todayChangePercent: totalTodayChangePercent,
     portfolioRows: portfolioRows,
@@ -281,6 +388,36 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
     accountSnapshots: accountSnapshots,
   );
 });
+
+double _calculateRealizedProfit(_TradeAggregation? trades, double currentCost) {
+  if (trades == null || trades.sellAmount == 0) {
+    return 0.0;
+  }
+  final soldCost = math.max(0.0, trades.buyAmount - currentCost);
+  return trades.sellAmount - soldCost;
+}
+
+class _TradeAggregation {
+  _TradeAggregation();
+
+  double buyAmount = 0;
+  double sellAmount = 0;
+  double commission = 0;
+  double stampTax = 0;
+
+  double get tradingCost => commission + stampTax;
+
+  void addBuy(double amount, double commission) {
+    buyAmount += amount;
+    this.commission += commission;
+  }
+
+  void addSell(double amount, double commission, double stampTax) {
+    sellAmount += amount;
+    this.commission += commission;
+    this.stampTax += stampTax;
+  }
+}
 
 double _sumMarketValue(Iterable<HoldingPosition> positions) {
   return positions.fold<double>(0, (sum, position) => sum + position.marketValue);

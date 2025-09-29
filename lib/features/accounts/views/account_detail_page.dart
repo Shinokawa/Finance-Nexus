@@ -444,50 +444,30 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           
           // 详细信息
           if (account.type == AccountType.investment) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem('持仓市值', _formatCurrency(summary.holdingsValue), labelColor),
-                ),
-                Expanded(
-                  child: _buildMetricItem('现金余额', _formatCurrency(account.balance), labelColor),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final snapshot = ref.watch(accountSnapshotProvider(account.id));
-                      final todayProfit = snapshot.when(
-                        data: (data) => data?.todayProfit ?? 0.0,
-                        loading: () => 0.0,
-                        error: (_, __) => 0.0,
-                      );
-                      final todayProfitText = _formatSignedCurrency(todayProfit);
-                      final todayColor = _resolveChangeColor(todayProfit);
-                      return _buildMetricItem('今日盈亏', todayProfitText, todayColor);
-                    },
+            Consumer(
+              builder: (context, ref, child) {
+                final snapshotAsync = ref.watch(accountSnapshotProvider(account.id));
+                return snapshotAsync.when(
+                  data: (snapshot) => _buildInvestmentMetrics(
+                    account: account,
+                    summary: summary,
+                    snapshot: snapshot,
+                    labelColor: labelColor,
                   ),
-                ),
-                Expanded(
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final snapshot = ref.watch(accountSnapshotProvider(account.id));
-                      final unrealizedProfit = snapshot.when(
-                        data: (data) => data?.unrealizedProfit ?? 0.0,
-                        loading: () => 0.0,
-                        error: (_, __) => 0.0,
-                      );
-                      final unrealizedProfitText = _formatSignedCurrency(unrealizedProfit);
-                      final unrealizedColor = _resolveChangeColor(unrealizedProfit);
-                      return _buildMetricItem('累计盈亏', unrealizedProfitText, unrealizedColor);
-                    },
+                  loading: () => _buildInvestmentMetrics(
+                    account: account,
+                    summary: summary,
+                    snapshot: null,
+                    labelColor: labelColor,
                   ),
-                ),
-              ],
+                  error: (_, __) => _buildInvestmentMetrics(
+                    account: account,
+                    summary: summary,
+                    snapshot: null,
+                    labelColor: labelColor,
+                  ),
+                );
+              },
             ),
           ] else ...[
             Row(
@@ -503,6 +483,146 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildInvestmentMetrics({
+    required Account account,
+    required AccountSummary summary,
+    required AccountSnapshot? snapshot,
+    required Color labelColor,
+  }) {
+    final holdingsValue = summary.holdingsValue;
+    final cashBalance = account.balance;
+    final totalAssets = holdingsValue + cashBalance;
+    final costBasis = snapshot?.costBasis;
+    final netProfit = snapshot?.netProfit;
+    final realizedProfit = snapshot?.realizedProfit;
+    final unrealizedProfit = snapshot?.unrealizedProfit;
+    final tradingCost = snapshot?.tradingCost;
+    final todayProfit = snapshot?.todayProfit;
+    final todayPercent = snapshot?.todayProfitPercent;
+    final netPercent =
+        (snapshot != null && snapshot.costBasis > 0) ? (snapshot.netProfit / snapshot.costBasis) * 100 : null;
+    final realizedPercent = (snapshot != null && snapshot.costBasis > 0)
+        ? (snapshot.realizedProfit / snapshot.costBasis) * 100
+        : null;
+
+    String formatChange(double? amount, double? percent) {
+      if (amount == null) return '--';
+      return _formatChangeWithPercent(amount, percent);
+    }
+
+    String formatPercent(double? value) {
+      if (value == null) return '--';
+      final sign = value >= 0 ? '+' : '';
+      return '$sign${value.toStringAsFixed(2)}%';
+    }
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricItem('持仓市值', _formatCurrency(holdingsValue), labelColor),
+            ),
+            Expanded(
+              child: _buildMetricItem('现金余额', _formatCurrency(cashBalance), labelColor),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricItem('总资产', _formatCurrency(totalAssets), labelColor),
+            ),
+            Expanded(
+              child: _buildMetricItem(
+                '组合成本',
+                costBasis != null ? _formatCurrency(costBasis) : '--',
+                labelColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricItem(
+                '总盈亏',
+                formatChange(netProfit, netPercent),
+                _resolveChangeColor(netProfit),
+              ),
+            ),
+            Expanded(
+              child: _buildMetricItem(
+                '已实现盈亏',
+                formatChange(realizedProfit, realizedPercent),
+                _resolveChangeColor(realizedProfit),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricItem(
+                '未实现盈亏',
+                formatChange(unrealizedProfit, snapshot?.unrealizedPercent),
+                _resolveChangeColor(unrealizedProfit),
+              ),
+            ),
+            Expanded(
+              child: _buildMetricItem(
+                '交易成本',
+                tradingCost != null ? _formatSignedCurrency(-tradingCost) : '--',
+                _resolveChangeColor(tradingCost != null ? -tradingCost : null),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricItem(
+                '今日盈亏',
+                _formatSignedCurrency(todayProfit),
+                _resolveChangeColor(todayProfit),
+              ),
+            ),
+            Expanded(
+              child: _buildMetricItem(
+                '今日涨跌幅',
+                formatPercent(todayPercent),
+                _resolveChangeColor(todayProfit),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricItem(
+                '总收益率',
+                formatPercent(netPercent),
+                _resolveChangeColor(netProfit),
+              ),
+            ),
+            Expanded(
+              child: _buildMetricItem(
+                '未实现收益率',
+                formatPercent(snapshot?.unrealizedPercent),
+                _resolveChangeColor(unrealizedProfit),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1878,6 +1998,15 @@ String _formatSignedCurrency(double? value) {
   }
   final sign = value > 0 ? '+' : '-';
   return '$sign¥$absValue';
+}
+
+String _formatChangeWithPercent(double amount, double? percent) {
+  final amountText = _formatSignedCurrency(amount);
+  if (percent == null) {
+    return amountText;
+  }
+  final sign = percent >= 0 ? '+' : '';
+  return '$amountText ($sign${percent.toStringAsFixed(2)}%)';
 }
 
 class _TransactionItem extends StatelessWidget {

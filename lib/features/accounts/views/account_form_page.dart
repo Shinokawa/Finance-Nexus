@@ -18,6 +18,8 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _balanceController;
+  late final TextEditingController _commissionController;
+  late final TextEditingController _stampTaxController;
   late AccountType _selectedType;
   bool _isSaving = false;
 
@@ -34,12 +36,20 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
     _balanceController = TextEditingController(
       text: initialBalance == 0 ? '' : initialBalance.toStringAsFixed(2),
     );
+    _commissionController = TextEditingController(
+      text: account?.commissionRate.toStringAsFixed(4) ?? '0.0003',
+    );
+    _stampTaxController = TextEditingController(
+      text: account?.stampTaxRate.toStringAsFixed(4) ?? '0.0010',
+    );
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _balanceController.dispose();
+    _commissionController.dispose();
+    _stampTaxController.dispose();
     super.dispose();
   }
 
@@ -51,6 +61,8 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
     final name = _nameController.text.trim();
     final rawBalance = _balanceController.text.trim();
     final balance = _requiresBalance ? double.tryParse(rawBalance) ?? 0.0 : 0.0;
+  final commissionRate = double.tryParse(_commissionController.text.trim());
+  final stampTaxRate = double.tryParse(_stampTaxController.text.trim());
     final repository = ref.read(accountRepositoryProvider);
 
     setState(() => _isSaving = true);
@@ -60,6 +72,8 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
           name: name,
           type: _selectedType,
           balance: balance,
+          commissionRate: commissionRate,
+          stampTaxRate: stampTaxRate,
         );
       } else {
         await repository.updateAccount(
@@ -67,6 +81,8 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
           name: name,
           type: _selectedType,
           balance: _requiresBalance ? balance : widget.account!.balance,
+          commissionRate: commissionRate,
+          stampTaxRate: stampTaxRate,
         );
       }
       if (mounted) {
@@ -186,6 +202,34 @@ class _AccountFormPageState extends ConsumerState<AccountFormPage> {
                         return null;
                       },
                     ),
+                  if (_selectedType == AccountType.investment) ...[
+                    CupertinoTextFormFieldRow(
+                      controller: _commissionController,
+                      prefix: const Text('佣金率'),
+                      placeholder: '0.0003',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        final number = double.tryParse((value ?? '').trim());
+                        if (number == null || number < 0) {
+                          return '请输入合法佣金率';
+                        }
+                        return null;
+                      },
+                    ),
+                    CupertinoTextFormFieldRow(
+                      controller: _stampTaxController,
+                      prefix: const Text('印花税率'),
+                      placeholder: '0.0010',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        final number = double.tryParse((value ?? '').trim());
+                        if (number == null || number < 0) {
+                          return '请输入合法税率';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                 ],
               ),
               Padding(

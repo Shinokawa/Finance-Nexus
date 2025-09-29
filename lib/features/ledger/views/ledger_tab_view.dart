@@ -6,6 +6,7 @@ import '../../../data/local/app_database.dart';
 import '../../../design/design_system.dart';
 import '../../../providers/repository_providers.dart';
 import '../../accounts/providers/account_summary_providers.dart';
+import '../providers/transaction_providers.dart';
 import 'transaction_form_page.dart';
 
 class LedgerTabView extends ConsumerWidget {
@@ -110,12 +111,6 @@ class LedgerTabView extends ConsumerWidget {
     return sortedGrouped;
   }
 }
-
-// 流水数据的 Provider
-final transactionsStreamProvider = StreamProvider<List<Transaction>>((ref) {
-  final repository = ref.watch(transactionRepositoryProvider);
-  return repository.watchTransactions();
-});
 
 class _TransactionDateSection extends ConsumerWidget {
   const _TransactionDateSection({
@@ -468,6 +463,8 @@ class _TransactionCard extends ConsumerWidget {
               type: AccountType.cash, 
               currency: AccountCurrency.cny, 
               balance: 0,
+              commissionRate: 0,
+              stampTaxRate: 0,
               createdAt: DateTime.now(),
             ))
         : null;
@@ -480,6 +477,8 @@ class _TransactionCard extends ConsumerWidget {
               type: AccountType.cash, 
               currency: AccountCurrency.cny, 
               balance: 0,
+              commissionRate: 0,
+              stampTaxRate: 0,
               createdAt: DateTime.now(),
             ))
         : null;
