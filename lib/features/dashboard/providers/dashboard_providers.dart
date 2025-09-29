@@ -25,6 +25,7 @@ class DashboardData {
     required this.portfolioSnapshots,
     required this.accountSnapshots,
     required this.currentMonthExpense,
+    required this.currentMonthIncome,
   });
 
   final double totalNetWorth;
@@ -39,6 +40,7 @@ class DashboardData {
   final Map<String, PortfolioSnapshot> portfolioSnapshots;
   final Map<String, AccountSnapshot> accountSnapshots;
   final double currentMonthExpense;
+  final double currentMonthIncome;
 
   double get totalNetProfit =>
       totalUnrealizedProfit + totalRealizedProfit - totalTradingCost;
@@ -157,6 +159,13 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
 
   final currentMonthExpense = transactions.where((transaction) {
     if (transaction.type != TransactionType.expense) {
+      return false;
+    }
+    return !transaction.date.isBefore(monthStart);
+  }).fold<double>(0, (sum, txn) => sum + txn.amount.abs());
+
+  final currentMonthIncome = transactions.where((transaction) {
+    if (transaction.type != TransactionType.income) {
       return false;
     }
     return !transaction.date.isBefore(monthStart);
@@ -400,6 +409,7 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
     portfolioSnapshots: portfolioSnapshots,
     accountSnapshots: accountSnapshots,
     currentMonthExpense: currentMonthExpense,
+    currentMonthIncome: currentMonthIncome,
   );
 });
 

@@ -347,43 +347,61 @@ class _TotalNetWorthCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
+          Row(
             children: [
-              _NetWorthMetric(
-                label: '投资市值',
-                value: _formatCurrency(investmentValue),
-                subtitle: '${((investmentValue / data.totalNetWorth) * 100).toStringAsFixed(1)}%',
+              Expanded(
+                child: _NetWorthMetric(
+                  label: '投资市值',
+                  value: _formatCurrency(investmentValue),
+                  subtitle: '${((investmentValue / data.totalNetWorth) * 100).toStringAsFixed(1)}%',
+                ),
               ),
-              _NetWorthMetric(
-                label: '现金资产',
-                value: _formatCurrency(cashValue),
-                subtitle: '${((cashValue / data.totalNetWorth) * 100).toStringAsFixed(1)}%',
+              const SizedBox(width: 16),
+              Expanded(
+                child: _NetWorthMetric(
+                  label: '现金资产',
+                  value: _formatCurrency(cashValue),
+                  subtitle: '${((cashValue / data.totalNetWorth) * 100).toStringAsFixed(1)}%',
+                ),
               ),
-              _NetWorthMetric(
-                label: '负债金额',
-                value: _formatCurrency(liabilityValue),
-                subtitle: '${((liabilityValue / data.totalNetWorth) * 100).toStringAsFixed(1)}%',
+              const SizedBox(width: 16),
+              Expanded(
+                child: _NetWorthMetric(
+                  label: '负债金额',
+                  value: _formatCurrency(liabilityValue),
+                  subtitle: '${((liabilityValue / data.totalNetWorth) * 100).toStringAsFixed(1)}%',
+                ),
               ),
-              _NetWorthMetric(
-                label: '投入本金',
-                value: _formatCurrency(data.totalCostBasis),
-                subtitle: null,
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _NetWorthMetric(
+                  label: '总盈亏',
+                  value: _formatSignedCurrency(totalNetProfit),
+                  color: cumulativeColor,
+                  subtitle: totalReturnPercent != null
+                      ? _formatSignedPercent(totalReturnPercent)
+                      : null,
+                ),
               ),
-              _NetWorthMetric(
-                label: '总盈亏',
-                value: _formatSignedCurrency(totalNetProfit),
-                color: cumulativeColor,
-                subtitle: totalReturnPercent != null
-                    ? _formatSignedPercent(totalReturnPercent)
-                    : null,
+              const SizedBox(width: 16),
+              Expanded(
+                child: _NetWorthMetric(
+                  label: '本月收入',
+                  value: _formatSignedCurrency(data.currentMonthIncome),
+                  color: _resolveChangeColor(data.currentMonthIncome),
+                ),
               ),
-              _NetWorthMetric(
-                label: '本月支出',
-                value: _formatSignedCurrency(-data.currentMonthExpense),
-                color: _resolveChangeColor(-data.currentMonthExpense),
-                subtitle: null,
+              const SizedBox(width: 16),
+              Expanded(
+                child: _NetWorthMetric(
+                  label: '本月支出',
+                  value: _formatSignedCurrency(-data.currentMonthExpense),
+                  color: _resolveChangeColor(-data.currentMonthExpense),
+                ),
               ),
             ],
           ),
