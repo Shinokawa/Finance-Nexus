@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // 预设的支出类别
 const List<String> predefinedCategories = [
@@ -59,22 +63,95 @@ const List<String> predefinedCategories = [
   '其他',
 ];
 
+const _customCategoriesKey = 'ledger_custom_categories';
+
 // 自定义类别管理
 class CustomCategoriesNotifier extends StateNotifier<Set<String>> {
-  CustomCategoriesNotifier() : super(<String>{});
+  CustomCategoriesNotifier() : super(<String>{}) {
+    _load();
+  }
 
-  void addCategory(String category) {
-    if (category.trim().isNotEmpty) {
-      state = {...state, category.trim()};
+  SharedPreferences? _preferences;
+  bool _preferencesUnavailable = false;
+  bool _isLoading = false;
+
+  Future<void> _load() async {
+    if (_isLoading) return;
+    _isLoading = true;
+    final prefs = await _ensurePreferences();
+    if (prefs != null) {
+      final stored = prefs.getStringList(_customCategoriesKey);
+      if (stored != null && stored.isNotEmpty) {
+        final normalized = stored
+            .map((category) => category.trim())
+            .where((category) => category.isNotEmpty)
+            .toSet();
+        if (normalized.isNotEmpty) {
+          state = normalized;
+        }
+      }
+    }
+    _isLoading = false;
+  }
+
+  Future<SharedPreferences?> _ensurePreferences() async {
+    if (_preferencesUnavailable) {
+      return null;
+    }
+    if (_preferences != null) {
+      return _preferences;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _preferences = prefs;
+      return prefs;
+    } catch (error) {
+      debugPrint('[Category] SharedPreferences unusable: $error');
+      _preferencesUnavailable = true;
+      return null;
     }
   }
 
+  void addCategory(String category) {
+    final trimmed = category.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    if (state.contains(trimmed)) {
+      return;
+    }
+    state = {...state, trimmed};
+    unawaited(_persistCategories());
+  }
+
   void removeCategory(String category) {
+    if (!state.contains(category)) {
+      return;
+    }
     state = state.where((cat) => cat != category).toSet();
+    unawaited(_persistCategories());
   }
 
   void clearCategories() {
+    if (state.isEmpty) {
+      return;
+    }
     state = <String>{};
+    unawaited(_persistCategories());
+  }
+
+  Future<void> _persistCategories() async {
+    final prefs = await _ensurePreferences();
+    if (prefs == null) {
+      return;
+    }
+    try {
+      final sortedCategories = state.toList()..sort();
+      await prefs.setStringList(_customCategoriesKey, sortedCategories);
+    } catch (error) {
+      debugPrint('[Category] Failed to persist custom categories: $error');
+      _preferencesUnavailable = true;
+    }
   }
 }
 
