@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -76,6 +77,12 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
     final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
     final category = _categoryController.text.trim();
     final notes = _notesController.text.trim();
+  final sanitizedCategory = category.isEmpty ? null : category;
+  final sanitizedNotes = notes.isEmpty ? null : notes;
+  final sanitizedFromAccountId =
+    _needsFromAccount ? _selectedFromAccountId : null;
+  final sanitizedToAccountId =
+    _needsToAccount ? _selectedToAccountId : null;
 
     if (_needsFromAccount && _selectedFromAccountId == null) {
       _showError('请选择来源账户');
@@ -97,14 +104,26 @@ class _TransactionFormPageState extends ConsumerState<TransactionFormPage> {
           amount: amount,
           date: _selectedDate,
           type: _selectedType,
-          category: category.isEmpty ? null : category,
-          notes: notes.isEmpty ? null : notes,
-          fromAccountId: _selectedFromAccountId,
-          toAccountId: _selectedToAccountId,
+          category: sanitizedCategory,
+          notes: sanitizedNotes,
+          fromAccountId: sanitizedFromAccountId,
+          toAccountId: sanitizedToAccountId,
         );
       } else {
-        // 这里可以添加更新逻辑
-        throw UnimplementedError('交易更新功能暂未实现');
+        final updatedTransaction = widget.transaction!.copyWith(
+          amount: amount,
+          date: _selectedDate,
+          type: _selectedType,
+          category: Value<String?>(sanitizedCategory),
+          notes: Value<String?>(sanitizedNotes),
+          fromAccountId: Value<String?>(sanitizedFromAccountId),
+          toAccountId: Value<String?>(sanitizedToAccountId),
+        );
+
+        final success = await repository.updateTransaction(updatedTransaction);
+        if (!success) {
+          throw Exception('交易更新失败');
+        }
       }
 
       if (mounted) {

@@ -337,6 +337,13 @@ class _TransactionCard extends ConsumerWidget {
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.of(context).pop();
+              _navigateToEdit(context, ref);
+            },
+            child: const Text('编辑'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
               _showDeleteConfirmation(context, ref);
             },
             isDestructiveAction: true,
@@ -349,6 +356,18 @@ class _TransactionCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _navigateToEdit(BuildContext context, WidgetRef ref) async {
+    final result = await Navigator.of(context).push<bool>(
+      CupertinoPageRoute(
+        builder: (context) => TransactionFormPage(transaction: transaction),
+      ),
+    );
+
+    if (result == true) {
+      ref.invalidate(transactionsStreamProvider);
+    }
   }
 
   void _showDeleteConfirmation(BuildContext context, WidgetRef ref) {

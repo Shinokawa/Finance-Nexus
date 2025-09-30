@@ -1,8 +1,13 @@
+import 'dart:math' as math;
+
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/enums.dart';
 import '../../../data/local/app_database.dart';
+import '../../../data/repositories/account_repository.dart';
 import '../../../design/design_system.dart';
 import '../../../providers/repository_providers.dart';
 
@@ -433,10 +438,18 @@ class _TradeFormPageState extends ConsumerState<TradeFormPage> {
     try {
       final transactionRepository = ref.read(transactionRepositoryProvider);
       final holdingRepository = ref.read(holdingRepositoryProvider);
-      
+      final accountRepository = ref.read(accountRepositoryProvider);
+      final tradeAccount = await accountRepository.getAccountById(widget.holding.accountId);
+      if (tradeAccount == null) {
+        throw Exception('未找到关联账户');
+      }
+
       final amount = quantity * price;
       final notes = _notesController.text.trim();
-      
+      final commission = _transactionType == TransactionType.buy || _transactionType == TransactionType.sell
+          ? _calculateCommission(amount, tradeAccount)
+          : 0.0;
+
       // 创建交易记录
       await transactionRepository.createTransaction(
         amount: amount,
@@ -451,43 +464,26 @@ class _TradeFormPageState extends ConsumerState<TradeFormPage> {
 
       // 更新持仓
       if (_transactionType == TransactionType.buy) {
-        // 买入：更新数量和平均成本
         final newQuantity = widget.holding.quantity + quantity;
-        final totalCost = (widget.holding.quantity * widget.holding.averageCost) + amount;
+        final totalCost = (widget.holding.quantity * widget.holding.averageCost) + amount + commission;
         final newAverageCost = totalCost / newQuantity;
-        
+
         await holdingRepository.updateHolding(
           widget.holding,
           quantity: newQuantity,
           averageCost: newAverageCost,
         );
       } else {
-        // 卖出：只更新数量
         final newQuantity = widget.holding.quantity - quantity;
-        
+
         if (newQuantity > 0) {
           await holdingRepository.updateHolding(
             widget.holding,
             quantity: newQuantity,
           );
         } else {
-          // 如果全部卖出，删除持仓
           await holdingRepository.deleteHolding(widget.holding.id);
         }
-      }
-
-      // 更新账户余额
-      final accountRepository = ref.read(accountRepositoryProvider);
-      final account = await accountRepository.getAccountById(widget.holding.accountId);
-      if (account != null) {
-        final newBalance = _transactionType == TransactionType.buy
-            ? account.balance - amount  // 买入减少现金
-            : account.balance + amount; // 卖出增加现金
-            
-        await accountRepository.updateAccount(
-          account,
-          balance: newBalance,
-        );
       }
 
       if (mounted) {
@@ -504,6 +500,15 @@ class _TradeFormPageState extends ConsumerState<TradeFormPage> {
         });
       }
     }
+  }
+
+  double _calculateCommission(double amount, Account account) {
+    if (amount <= 0 || account.type != AccountType.investment) {
+      return 0;
+    }
+    final effectiveRate = math.max(account.commissionRate, AccountRepository.minCommissionRate);
+    final fee = amount * effectiveRate;
+    return math.max(fee, AccountRepository.minCommissionPerTrade);
   }
 
   void _showErrorDialog(String message) {
