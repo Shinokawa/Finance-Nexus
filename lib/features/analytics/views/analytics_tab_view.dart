@@ -63,70 +63,72 @@ class AnalyticsTabView extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: snapshotAsync.when(
-                data: (snapshot) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          '分析区间',
-                          style: QHTypography.footnote.copyWith(
-                            color: CupertinoDynamicColor.resolve(
-                              CupertinoColors.secondaryLabel,
-                              context,
-                            ),
-                            fontWeight: FontWeight.w600,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '分析区间',
+                        style: QHTypography.footnote.copyWith(
+                          color: CupertinoDynamicColor.resolve(
+                            CupertinoColors.secondaryLabel,
+                            context,
                           ),
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _RangeSelector(
-                              range: range,
-                              onChanged: (value) {
-                                if (value != null) {
-                                  ref
-                                          .read(netWorthRangeProvider.notifier)
-                                          .state =
-                                      value;
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    if (!settings.analyticsAutoRefresh) ...[
-                      _ManualRefreshBanner(onRefresh: handleRefresh),
-                      const SizedBox(height: 16),
-                    ],
-                    homeAsync.when(
-                      data: (home) => _AnalyticsHomeSection(
-                        snapshot: home,
-                        selected: selectedTarget,
-                        range: range,
-                        onSelect: (target) {
-                          ref
-                                  .read(
-                                    selectedAnalyticsTargetProvider.notifier,
-                                  )
-                                  .state =
-                              target;
-                        },
                       ),
-                      loading: () => const _HomeLoadingPlaceholder(),
-                      error: (error, stack) =>
-                          _SectionCard(child: _HomeErrorState(error: error)),
-                    ),
-                    const SizedBox(height: 24),
-                    _AnalyticsBody(snapshot: snapshot, target: selectedTarget),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _RangeSelector(
+                            range: range,
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                        .read(netWorthRangeProvider.notifier)
+                                        .state =
+                                    value;
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  if (!settings.analyticsAutoRefresh) ...[
+                    _ManualRefreshBanner(onRefresh: handleRefresh),
+                    const SizedBox(height: 16),
                   ],
-                ),
-                loading: () => const _LoadingPlaceholder(),
-                error: (error, stack) => _ErrorState(error: error),
+                  // 支出洞察部分独立显示，不依赖后端
+                  homeAsync.when(
+                    data: (home) => _AnalyticsHomeSection(
+                      snapshot: home,
+                      selected: selectedTarget,
+                      range: range,
+                      onSelect: (target) {
+                        ref
+                                .read(
+                                  selectedAnalyticsTargetProvider.notifier,
+                                )
+                                .state =
+                            target;
+                      },
+                    ),
+                    loading: () => const _HomeLoadingPlaceholder(),
+                    error: (error, stack) =>
+                        _SectionCard(child: _HomeErrorState(error: error)),
+                  ),
+                  const SizedBox(height: 24),
+                  // 组合分析部分，依赖后端行情数据
+                  snapshotAsync.when(
+                    data: (snapshot) => _AnalyticsBody(snapshot: snapshot, target: selectedTarget),
+                    loading: () => const _LoadingPlaceholder(),
+                    error: (error, stack) => _ErrorState(error: error),
+                  ),
+                ],
               ),
             ),
           ),

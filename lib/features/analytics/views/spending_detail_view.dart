@@ -6,6 +6,7 @@ import '../../../design/design_system.dart';
 import '../../../widgets/simple_pie_chart.dart';
 import '../models/analytics_models.dart';
 import '../widgets/analytics_line_chart.dart';
+import '../widgets/analytics_bar_chart.dart';
 
 class SpendingDetailView extends StatelessWidget {
   const SpendingDetailView({super.key, required this.overview});
@@ -23,10 +24,17 @@ class SpendingDetailView extends StatelessWidget {
   final trend = _resolveTrend(overview.dailyTrend);
   final trimmedTrend = trend.points;
   final coverageDays = trend.coverageDays;
+    
+    // 计算每日平均支出
+    final dailyAverage = coverageDays > 0 
+        ? overview.totalExpense / coverageDays 
+        : 0.0;
+    
+    // 构建副标题，包含每日平均支出
     final subtitle = switch (coverageDays) {
       0 => '暂无可视化数据，先记一笔消费吧。',
       1 => '仅包含最近 1 天消费，已自动拉伸展示。',
-      _ => '覆盖最近 $coverageDays 天消费走势，可在 30 天内自适应展示。',
+      _ => '覆盖最近 $coverageDays 天消费走势，每日平均支出 ${_formatCurrency(dailyAverage)}',
     };
 
     final lineSeries = [
@@ -36,6 +44,15 @@ class SpendingDetailView extends StatelessWidget {
         points: trimmedTrend,
       ),
     ];
+    
+    // 准备柱状图数据
+    final barData = overview.monthlySummary
+        .map((m) => MonthlyBarData(
+              month: m.month,
+              income: m.income,
+              expense: m.expense,
+            ))
+        .toList();
 
     return CupertinoPageScaffold(
       backgroundColor: background,
@@ -55,6 +72,8 @@ class SpendingDetailView extends StatelessWidget {
                     child: _SummarySection(overview: overview),
                   ),
                   const SizedBox(height: 20),
+                  _WeeklySpendingCard(overview: overview),
+                  const SizedBox(height: 20),
                   AnalyticsLineChart(
                     title: '每日支出轨迹',
                     subtitle: subtitle,
@@ -70,6 +89,16 @@ class SpendingDetailView extends StatelessWidget {
                     const SizedBox(height: 20),
                     _SpendingDetailCard(
                       child: _CategoryPieChart(overview: overview),
+                    ),
+                  ],
+                  if (barData.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    AnalyticsBarChart(
+                      title: '近六个月收支对比',
+                      subtitle: '展示最近 6 个月的收入与支出趋势，帮助把握财务状况。',
+                      data: barData,
+                      height: 280,
+                      valueFormatter: _formatCurrency,
                     ),
                   ],
                   if (overview.insights.isNotEmpty) ...[
@@ -109,20 +138,39 @@ class _SummarySection extends StatelessWidget {
         : change < 0
         ? CupertinoColors.systemGreen
         : label;
+    
+    final savingsRate = overview.savingsRate;
+    final savingsColor = savingsRate >= 0.3
+        ? CupertinoColors.systemGreen
+        : savingsRate >= 0.1
+        ? CupertinoColors.systemOrange
+        : CupertinoColors.systemRed;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('近 30 天累计支出', style: QHTypography.footnote.copyWith(color: label)),
+        Text('近 30 天财务概览', style: QHTypography.footnote.copyWith(color: label)),
         const SizedBox(height: 8),
-        Text(
-          _formatCurrency(overview.totalExpense),
-          style: QHTypography.largeTitle.copyWith(
-            color: valueColor,
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              _formatCurrency(overview.totalExpense),
+              style: QHTypography.largeTitle.copyWith(
+                color: valueColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '支出',
+              style: QHTypography.body.copyWith(color: label),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
+        // 收入和储蓄率
         Row(
           children: [
             Expanded(
@@ -130,37 +178,219 @@ class _SummarySection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '上一周期（前 30 天）',
+                    '收入',
                     style: QHTypography.footnote.copyWith(color: label),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _formatCurrency(overview.previousExpense),
-                    style: QHTypography.subheadline.copyWith(color: valueColor),
+                    _formatCurrency(overview.totalIncome),
+                    style: QHTypography.title3.copyWith(
+                      color: CupertinoColors.systemGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '储蓄率',
+                    style: QHTypography.footnote.copyWith(color: label),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    overview.totalIncome == 0 ? '--' : '${(savingsRate * 100).toStringAsFixed(1)}%',
+                    style: QHTypography.title3.copyWith(
+                      color: savingsColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (overview.totalIncome > 0) ...[
+          const SizedBox(height: 12),
+          // 储蓄率进度条
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final progressWidth = (constraints.maxWidth * savingsRate).clamp(0.0, constraints.maxWidth);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: SizedBox(
+                      height: 8,
+                      child: Stack(
+                        children: [
+                          Container(color: label.withValues(alpha: 0.2)),
+                          Positioned.fill(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                width: progressWidth,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      CupertinoColors.systemGreen,
+                                      CupertinoColors.systemGreen.withValues(alpha: 0.7),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '结余 ${_formatCurrency(overview.totalIncome - overview.totalExpense)}',
+                    style: QHTypography.footnote.copyWith(color: label),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+        const SizedBox(height: 16),
+        Container(
+          height: 1,
+          color: CupertinoDynamicColor.resolve(CupertinoColors.separator, context),
+        ),
+        const SizedBox(height: 16),
+        // 环比变化和最大单笔
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '环比变化',
+                    style: QHTypography.footnote.copyWith(color: label),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatSignedPercent(change),
+                    style: QHTypography.subheadline.copyWith(
+                      color: changeColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (overview.largestExpense != null)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '最大单笔',
+                      style: QHTypography.footnote.copyWith(color: label),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatCurrency(overview.largestExpense!.amount),
+                      style: QHTypography.subheadline.copyWith(
+                        color: valueColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      overview.largestExpense!.category,
+                      style: QHTypography.footnote.copyWith(color: label),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _WeeklySpendingCard extends StatelessWidget {
+  const _WeeklySpendingCard({required this.overview});
+
+  final SpendingAnalyticsOverview overview;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = CupertinoDynamicColor.resolve(QHColors.cardBackground, context);
+    final labelColor = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
+    final valueColor = CupertinoDynamicColor.resolve(CupertinoColors.label, context);
+    
+    final weeklyChange = overview.weeklyChange;
+    final changeColor = weeklyChange > 0
+        ? CupertinoColors.systemRed
+        : weeklyChange < 0
+        ? CupertinoColors.systemGreen
+        : labelColor;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(QHSpacing.cornerRadius),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '环比变化',
-                  style: QHTypography.footnote.copyWith(color: label),
+                  '本周支出',
+                  style: QHTypography.footnote.copyWith(color: labelColor),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _formatSignedPercent(change),
-                  style: QHTypography.title3.copyWith(
-                    color: changeColor,
+                  _formatCurrency(overview.weeklyExpense),
+                  style: QHTypography.title1.copyWith(
+                    color: valueColor,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-      ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '较上周',
+                style: QHTypography.footnote.copyWith(color: labelColor),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatSignedPercent(weeklyChange),
+                style: QHTypography.body.copyWith(
+                  color: changeColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

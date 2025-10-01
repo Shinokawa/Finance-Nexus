@@ -127,8 +127,18 @@ class PortfolioAnalyticsService {
   Future<AnalyticsHomeSnapshot> buildHomeSnapshot({
     required NetWorthRange range,
   }) async {
-    final previews = await _buildPortfolioPreviews(range: range);
+    // 支出洞察不依赖行情数据，优先加载
     final spending = await _buildSpendingOverview();
+    
+    // 组合预览依赖行情数据，如果失败则返回空列表，不影响支出洞察显示
+    List<PortfolioAnalyticsPreview> previews;
+    try {
+      previews = await _buildPortfolioPreviews(range: range);
+    } catch (e) {
+      // 行情数据加载失败时，仍然可以显示支出洞察
+      previews = [];
+    }
+    
     return AnalyticsHomeSnapshot(
       generatedAt: DateTime.now(),
       previews: previews,
@@ -202,10 +212,17 @@ class PortfolioAnalyticsService {
     final now = DateTime.now();
     DateTime normalize(DateTime date) =>
         DateTime(date.year, date.month, date.day);
+    DateTime normalizeMonth(DateTime date) =>
+        DateTime(date.year, date.month);
 
     final window = const Duration(days: 30);
     final cutoff = now.subtract(window);
     final previousCutoff = cutoff.subtract(window);
+    
+    // 本周和上周的计算
+    final weekStart = now.subtract(Duration(days: now.weekday - 1)); // 本周一
+    final normalizedWeekStart = DateTime(weekStart.year, weekStart.month, weekStart.day);
+    final previousWeekStart = normalizedWeekStart.subtract(const Duration(days: 7)); // 上周一
 
     final recentExpenses = transactions
         .where(
@@ -220,17 +237,55 @@ class PortfolioAnalyticsService {
     }
 
     double totalExpense = 0;
+    double totalIncome = 0;
     double previousExpense = 0;
+    double weeklyExpense = 0;
+    double previousWeeklyExpense = 0;
     final trend = <DateTime, double>{};
     final categories = <String, double>{};
+    
+    // 查找最大单笔支出
+    double largestAmount = 0;
+    String largestCategory = '';
+    DateTime? largestDate;
+
+    // 计算近30天收入
+    final recentIncomes = transactions.where(
+      (txn) => txn.type == TransactionType.income && !txn.date.isBefore(cutoff),
+    );
+    for (final txn in recentIncomes) {
+      totalIncome += txn.amount.abs();
+    }
 
     for (final txn in recentExpenses) {
       final amount = txn.amount.abs();
+      
+      // 计算本周支出（本周一 00:00:00 到现在）
+      if (!txn.date.isBefore(normalizedWeekStart)) {
+        weeklyExpense += amount;
+      }
+      
+      // 计算上周支出（上周一 00:00:00 到上周日 23:59:59）
+      if (!txn.date.isBefore(previousWeekStart) && txn.date.isBefore(normalizedWeekStart)) {
+        previousWeeklyExpense += amount;
+      }
+      
       if (txn.date.isBefore(cutoff)) {
         previousExpense += amount;
         continue;
       }
+      
       totalExpense += amount;
+      
+      // 记录最大单笔支出（仅限近30天）
+      if (amount > largestAmount) {
+        largestAmount = amount;
+        largestCategory = txn.category?.trim().isEmpty ?? true
+            ? '未分类'
+            : txn.category!.trim();
+        largestDate = txn.date;
+      }
+      
       final day = normalize(txn.date);
       trend.update(day, (value) => value + amount, ifAbsent: () => amount);
       final category = txn.category?.trim().isEmpty ?? true
@@ -263,14 +318,58 @@ class PortfolioAnalyticsService {
         )
         .toList();
 
+    // 计算近6个月的收支统计
+    final monthlySummary = <MonthlyIncomeExpense>[];
+    final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
+    
+    // 按月分组所有交易
+    final monthlyData = <DateTime, ({double income, double expense})>{};
+    
+    for (final txn in transactions.where((t) => !t.date.isBefore(sixMonthsAgo))) {
+      final month = normalizeMonth(txn.date);
+      final amount = txn.amount.abs();
+      
+      if (txn.type == TransactionType.income) {
+        monthlyData.update(
+          month,
+          (existing) => (income: existing.income + amount, expense: existing.expense),
+          ifAbsent: () => (income: amount, expense: 0.0),
+        );
+      } else if (txn.type == TransactionType.expense) {
+        monthlyData.update(
+          month,
+          (existing) => (income: existing.income, expense: existing.expense + amount),
+          ifAbsent: () => (income: 0.0, expense: amount),
+        );
+      }
+    }
+    
+    // 生成最近6个月的数据，即使某月没有数据也显示
+    for (var i = 5; i >= 0; i--) {
+      final month = DateTime(now.year, now.month - i, 1);
+      final data = monthlyData[month] ?? (income: 0.0, expense: 0.0);
+      monthlySummary.add(MonthlyIncomeExpense(
+        month: month,
+        income: data.income,
+        expense: data.expense,
+      ));
+    }
+
     final insights = <AnalyticsInsight>[];
     final overview = SpendingAnalyticsOverview(
       generatedAt: now,
       totalExpense: totalExpense,
+      totalIncome: totalIncome,
       previousExpense: previousExpense,
       dailyTrend: dailyTrend,
       topCategories: breakdown,
       insights: insights,
+      monthlySummary: monthlySummary,
+      largestExpense: largestDate == null 
+          ? null 
+          : (amount: largestAmount, category: largestCategory, date: largestDate),
+      weeklyExpense: weeklyExpense,
+      previousWeeklyExpense: previousWeeklyExpense,
     );
 
     if (overview.momChange > 0.15) {

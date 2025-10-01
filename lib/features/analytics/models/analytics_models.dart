@@ -301,26 +301,59 @@ class SpendingCategoryBreakdown {
 }
 
 @immutable
+class MonthlyIncomeExpense {
+  const MonthlyIncomeExpense({
+    required this.month,
+    required this.income,
+    required this.expense,
+  });
+
+  final DateTime month;
+  final double income;
+  final double expense;
+}
+
+@immutable
 class SpendingAnalyticsOverview {
   const SpendingAnalyticsOverview({
     required this.generatedAt,
     required this.totalExpense,
+    required this.totalIncome,
     required this.previousExpense,
     required this.dailyTrend,
     required this.topCategories,
     required this.insights,
+    required this.monthlySummary,
+    required this.largestExpense,
+    required this.weeklyExpense,
+    required this.previousWeeklyExpense,
   });
 
   final DateTime generatedAt;
   final double totalExpense;
+  final double totalIncome;
   final double previousExpense;
   final List<TimeSeriesPoint> dailyTrend;
   final List<SpendingCategoryBreakdown> topCategories;
   final List<AnalyticsInsight> insights;
+  final List<MonthlyIncomeExpense> monthlySummary;
+  final ({double amount, String category, DateTime date})? largestExpense;
+  final double weeklyExpense;
+  final double previousWeeklyExpense;
 
   double get momChange {
     if (previousExpense == 0) return totalExpense == 0 ? 0 : 1;
     return (totalExpense - previousExpense) / previousExpense;
+  }
+  
+  double get savingsRate {
+    if (totalIncome == 0) return 0;
+    return (totalIncome - totalExpense) / totalIncome;
+  }
+  
+  double get weeklyChange {
+    if (previousWeeklyExpense == 0) return weeklyExpense == 0 ? 0 : 1;
+    return (weeklyExpense - previousWeeklyExpense) / previousWeeklyExpense;
   }
 }
 
