@@ -99,6 +99,34 @@ class Transactions extends Table {
       text().nullable().references(Holdings, #id)();
 }
 
+@DataClassName('Budget')
+class Budgets extends Table {
+  @override
+  Set<Column> get primaryKey => {id};
+
+  TextColumn get id => text().clientDefault(() => const Uuid().v4())();
+
+  TextColumn get type =>
+      text().map(const EnumNameTypeConverter(BudgetType.values))();
+
+  TextColumn get category => text().nullable()();
+
+  RealColumn get amount => real()();
+
+  TextColumn get period =>
+      text()
+          .withDefault(const Constant('monthly'))
+          .map(const EnumNameTypeConverter(BudgetPeriod.values))();
+
+  DateTimeColumn get startDate =>
+      dateTime().clientDefault(() => DateTime.now())();
+
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+
+  DateTimeColumn get createdAt =>
+      dateTime().clientDefault(() => DateTime.now())();
+}
+
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final file = await resolveApplicationDatabaseFile();
@@ -107,8 +135,8 @@ LazyDatabase _openConnection() {
 }
 
 @DriftDatabase(
-  tables: [Accounts, Portfolios, Holdings, Transactions],
-  daos: [AccountDao, PortfolioDao, HoldingDao, TransactionDao],
+  tables: [Accounts, Portfolios, Holdings, Transactions, Budgets],
+  daos: [AccountDao, PortfolioDao, HoldingDao, TransactionDao, BudgetDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : this._internal(_openConnection());
@@ -124,7 +152,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -142,6 +170,9 @@ class AppDatabase extends _$AppDatabase {
         await m.database.customStatement(
           'ALTER TABLE accounts ADD COLUMN stamp_tax_rate REAL NOT NULL DEFAULT 0.001',
         );
+      }
+      if (from < 4) {
+        await m.createTable(budgets);
       }
     },
   );
@@ -309,4 +340,74 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteAllTransactions() {
     return delete(transactions).go();
   }
+}
+
+@DriftAccessor(tables: [Budgets])
+class BudgetDao extends DatabaseAccessor<AppDatabase> with _$BudgetDaoMixin {
+  BudgetDao(super.db);
+
+  Future<List<Budget>> getAllBudgets() => select(budgets).get();
+
+  Stream<List<Budget>> watchBudgets() => (select(budgets)
+        ..where((tbl) => tbl.isActive.equals(true))
+        ..orderBy([
+          (tbl) => OrderingTerm(expression: tbl.type, mode: OrderingMode.asc),
+          (tbl) =>
+              OrderingTerm(expression: tbl.category, mode: OrderingMode.asc),
+        ]))
+      .watch();
+
+  Future<List<Budget>> getActiveBudgets() {
+    return (select(budgets)..where((tbl) => tbl.isActive.equals(true))).get();
+  }
+
+  Future<Budget?> getTotalBudget() {
+    return (select(budgets)
+          ..where((tbl) =>
+              tbl.type.equalsValue(BudgetType.total) &
+              tbl.isActive.equals(true))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<Budget?> getCategoryBudget(String category) {
+    return (select(budgets)
+          ..where((tbl) =>
+              tbl.type.equalsValue(BudgetType.category) &
+              tbl.category.equals(category) &
+              tbl.isActive.equals(true))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<List<Budget>> getCategoryBudgets() {
+    return (select(budgets)
+          ..where((tbl) =>
+              tbl.type.equalsValue(BudgetType.category) &
+              tbl.isActive.equals(true)))
+        .get();
+  }
+
+  Future<Budget?> getBudgetById(String id) {
+    return (select(budgets)..where((tbl) => tbl.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Future<int> insertBudget(BudgetsCompanion budget) =>
+      into(budgets).insert(budget, mode: InsertMode.insertOrReplace);
+
+  Future<bool> updateBudget(Budget budget) => update(budgets).replace(budget);
+
+  Future<int> deleteBudget(String id) {
+    return (delete(budgets)..where((tbl) => tbl.id.equals(id))).go();
+  }
+
+  Future<int> deactivateBudget(String id) async {
+    final budget = await getBudgetById(id);
+    if (budget == null) return 0;
+    return (update(budgets)..where((tbl) => tbl.id.equals(id)))
+        .write(BudgetsCompanion(isActive: Value(false)));
+  }
+
+  Future<int> deleteAllBudgets() => delete(budgets).go();
 }

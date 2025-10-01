@@ -16,6 +16,7 @@ final portfolioAnalyticsServiceProvider = Provider<PortfolioAnalyticsService>((r
     holdingRepository: ref.watch(holdingRepositoryProvider),
     portfolioRepository: ref.watch(portfolioRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
+    budgetRepository: ref.watch(budgetRepositoryProvider),
     marketDataService: ref.watch(marketDataServiceProvider),
     forecastProjectionService: ref.watch(_forecastProjectionServiceProvider),
   );

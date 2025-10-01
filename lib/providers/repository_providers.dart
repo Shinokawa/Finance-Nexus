@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/repositories/account_repository.dart';
+import '../data/repositories/budget_repository.dart';
 import '../data/repositories/holding_repository.dart';
 import '../data/repositories/portfolio_repository.dart';
 import '../data/repositories/quote_repository.dart';
@@ -29,4 +30,8 @@ final transactionRepositoryProvider = Provider<TransactionRepository>(
 
 final quoteRepositoryProvider = Provider<QuoteRepository>(
   (ref) => QuoteRepository(ref.watch(quoteApiClientProvider)),
+);
+
+final budgetRepositoryProvider = Provider<BudgetRepository>(
+  (ref) => BudgetRepository(ref.watch(budgetDaoProvider)),
 );

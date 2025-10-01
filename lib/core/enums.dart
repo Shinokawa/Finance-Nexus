@@ -4,6 +4,10 @@ enum AccountCurrency { cny }
 
 enum TransactionType { expense, income, transfer, buy, sell }
 
+enum BudgetPeriod { monthly, yearly }
+
+enum BudgetType { total, category }
+
 extension AccountTypeLabel on AccountType {
 	String get displayName {
 		switch (this) {
@@ -30,6 +34,28 @@ extension TransactionTypeLabel on TransactionType {
 				return '买入';
 			case TransactionType.sell:
 				return '卖出';
+		}
+	}
+}
+
+extension BudgetPeriodLabel on BudgetPeriod {
+	String get displayName {
+		switch (this) {
+			case BudgetPeriod.monthly:
+				return '月度';
+			case BudgetPeriod.yearly:
+				return '年度';
+		}
+	}
+}
+
+extension BudgetTypeLabel on BudgetType {
+	String get displayName {
+		switch (this) {
+			case BudgetType.total:
+				return '总预算';
+			case BudgetType.category:
+				return '分类预算';
 		}
 	}
 }

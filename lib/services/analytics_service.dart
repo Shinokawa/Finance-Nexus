@@ -4,6 +4,7 @@ import '../core/enums.dart';
 import '../features/analytics/models/analytics_models.dart';
 import '../providers/net_worth_range_state.dart';
 import '../widgets/net_worth_chart.dart';
+import '../data/repositories/budget_repository.dart';
 import '../data/repositories/holding_repository.dart';
 import '../data/repositories/portfolio_repository.dart';
 import '../data/repositories/transaction_repository.dart';
@@ -17,6 +18,7 @@ class PortfolioAnalyticsService {
     required this.holdingRepository,
     required this.portfolioRepository,
     required this.transactionRepository,
+    required this.budgetRepository,
     required this.marketDataService,
     required this.forecastProjectionService,
   });
@@ -25,6 +27,7 @@ class PortfolioAnalyticsService {
   final HoldingRepository holdingRepository;
   final PortfolioRepository portfolioRepository;
   final TransactionRepository transactionRepository;
+  final BudgetRepository budgetRepository;
   final MarketDataService marketDataService;
   final ForecastProjectionService forecastProjectionService;
 
@@ -215,14 +218,22 @@ class PortfolioAnalyticsService {
     DateTime normalizeMonth(DateTime date) =>
         DateTime(date.year, date.month);
 
+    // 将当前时间标准化为今天的00:00:00
+    final today = normalize(now);
+    
+    // 30天窗口：从30天前的00:00:00到今天23:59:59
+    // 例如：10月2日 → 9月3日00:00:00 到 10月2日23:59:59（共30天）
     final window = const Duration(days: 30);
-    final cutoff = now.subtract(window);
+    final cutoff = today.subtract(window); // 标准化后的cutoff，确保是00:00:00
     final previousCutoff = cutoff.subtract(window);
     
     // 本周和上周的计算
     final weekStart = now.subtract(Duration(days: now.weekday - 1)); // 本周一
     final normalizedWeekStart = DateTime(weekStart.year, weekStart.month, weekStart.day);
     final previousWeekStart = normalizedWeekStart.subtract(const Duration(days: 7)); // 上周一
+    
+    // 上月的起止日期（用于计算稳定的储蓄率、收入、结余）
+    final lastMonth = DateTime(now.year, now.month - 1, 1);
 
     final recentExpenses = transactions
         .where(
@@ -241,8 +252,16 @@ class PortfolioAnalyticsService {
     double previousExpense = 0;
     double weeklyExpense = 0;
     double previousWeeklyExpense = 0;
+    double monthlyExpense = 0; // 本月支出（用于预算对比）
+    double lastMonthIncome = 0; // 上月收入（用于储蓄率计算）
+    double lastMonthExpense = 0; // 上月支出（用于储蓄率计算）
     final trend = <DateTime, double>{};
     final categories = <String, double>{};
+    final previousCategories = <String, double>{}; // 上期类别统计
+    final monthlyCategories = <String, double>{}; // 本月类别统计（用于预算对比）
+    
+    // 本月起始日期
+    final monthStart = DateTime(now.year, now.month, 1);
     
     // 查找最大单笔支出
     double largestAmount = 0;
@@ -256,9 +275,44 @@ class PortfolioAnalyticsService {
     for (final txn in recentIncomes) {
       totalIncome += txn.amount.abs();
     }
+    
+    // 计算上月收入（用于储蓄率）
+    final lastMonthIncomes = transactions.where(
+      (txn) => txn.type == TransactionType.income 
+          && !txn.date.isBefore(lastMonth) 
+          && txn.date.isBefore(monthStart),
+    );
+    for (final txn in lastMonthIncomes) {
+      lastMonthIncome += txn.amount.abs();
+    }
+    
+    // 计算上月支出（用于储蓄率）
+    final lastMonthExpenses = transactions.where(
+      (txn) => txn.type == TransactionType.expense 
+          && !txn.date.isBefore(lastMonth) 
+          && txn.date.isBefore(monthStart),
+    );
+    for (final txn in lastMonthExpenses) {
+      lastMonthExpense += txn.amount.abs();
+    }
 
     for (final txn in recentExpenses) {
       final amount = txn.amount.abs();
+      
+      // 计算本月支出（用于预算对比）
+      if (!txn.date.isBefore(monthStart)) {
+        monthlyExpense += amount;
+        
+        // 统计本月类别（用于预算对比）
+        final category = txn.category?.trim().isEmpty ?? true
+            ? '未分类'
+            : txn.category!.trim();
+        monthlyCategories.update(
+          category,
+          (value) => value + amount,
+          ifAbsent: () => amount,
+        );
+      }
       
       // 计算本周支出（本周一 00:00:00 到现在）
       if (!txn.date.isBefore(normalizedWeekStart)) {
@@ -270,11 +324,24 @@ class PortfolioAnalyticsService {
         previousWeeklyExpense += amount;
       }
       
+      // 注意：这里改用 !isBefore(cutoff) 来包含cutoff当天的数据
+      // 30天窗口应该是 [cutoff, now]，包括两端
       if (txn.date.isBefore(cutoff)) {
         previousExpense += amount;
+        
+        // 统计上期类别
+        final category = txn.category?.trim().isEmpty ?? true
+            ? '未分类'
+            : txn.category!.trim();
+        previousCategories.update(
+          category,
+          (value) => value + amount,
+          ifAbsent: () => amount,
+        );
         continue;
       }
       
+      // 从cutoff（包含）到now的数据
       totalExpense += amount;
       
       // 记录最大单笔支出（仅限近30天）
@@ -314,6 +381,7 @@ class PortfolioAnalyticsService {
           (entry) => SpendingCategoryBreakdown(
             category: entry.key,
             amount: entry.value,
+            previousAmount: previousCategories[entry.key] ?? 0.0,
           ),
         )
         .toList();
@@ -355,6 +423,37 @@ class PortfolioAnalyticsService {
       ));
     }
 
+    // 加载预算数据
+    double? totalBudget;
+    Map<String, double>? categoryBudgets;
+    
+    try {
+      final budgets = await budgetRepository.getActiveBudgets();
+      
+      // 获取总预算
+      final totalBudgetEntity = budgets.where((b) => b.type == BudgetType.total).firstOrNull;
+      if (totalBudgetEntity != null) {
+        // 根据预算周期计算月度预算
+        totalBudget = totalBudgetEntity.period == BudgetPeriod.monthly
+            ? totalBudgetEntity.amount
+            : totalBudgetEntity.amount / 12;
+      }
+      
+      // 获取分类预算
+      final categoryBudgetList = budgets.where((b) => b.type == BudgetType.category);
+      if (categoryBudgetList.isNotEmpty) {
+        categoryBudgets = {};
+        for (final budget in categoryBudgetList) {
+          final monthlyAmount = budget.period == BudgetPeriod.monthly
+              ? budget.amount
+              : budget.amount / 12;
+          categoryBudgets[budget.category ?? '未分类'] = monthlyAmount;
+        }
+      }
+    } catch (e) {
+      // 预算加载失败不影响整体分析
+    }
+
     final insights = <AnalyticsInsight>[];
     final overview = SpendingAnalyticsOverview(
       generatedAt: now,
@@ -370,7 +469,47 @@ class PortfolioAnalyticsService {
           : (amount: largestAmount, category: largestCategory, date: largestDate),
       weeklyExpense: weeklyExpense,
       previousWeeklyExpense: previousWeeklyExpense,
+      monthlyExpense: monthlyExpense,
+      monthlyCategories: monthlyCategories,
+      totalBudget: totalBudget,
+      categoryBudgets: categoryBudgets,
+      lastMonthIncome: lastMonthIncome,
+      lastMonthExpense: lastMonthExpense,
     );
+
+    // 支出集中度分析
+    if (trend.isNotEmpty) {
+      // 按金额排序，找出支出最多的天数
+      final sortedExpenses = trend.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      
+      // 计算占80%支出的天数比例
+      final threshold = totalExpense * 0.8;
+      var accumulated = 0.0;
+      var daysCount = 0;
+      
+      for (final entry in sortedExpenses) {
+        accumulated += entry.value;
+        daysCount++;
+        if (accumulated >= threshold) {
+          break;
+        }
+      }
+      
+      final totalDays = trend.length;
+      final concentrationRatio = daysCount / totalDays;
+      
+      // 如果80%的支出集中在少于30%的天数，视为支出集中
+      if (concentrationRatio < 0.3 && totalDays >= 10) {
+        insights.add(
+          AnalyticsInsight(
+            title: '支出过于集中',
+            detail: '${(concentrationRatio * 100).toStringAsFixed(0)}% 的天数产生了 80% 的支出。建议分散消费以更好管理预算。',
+            severity: InsightSeverity.neutral,
+          ),
+        );
+      }
+    }
 
     if (overview.momChange > 0.15) {
       insights.add(
@@ -404,6 +543,55 @@ class PortfolioAnalyticsService {
           severity: InsightSeverity.positive,
         ),
       );
+    }
+    
+    // 预算超支检测（使用本月支出）
+    if (totalBudget != null) {
+      final budgetUsage = monthlyExpense / totalBudget;
+      if (budgetUsage > 1.0) {
+        insights.add(
+          AnalyticsInsight(
+            title: '总预算已超支',
+            detail: '本月支出已超出预算 ${((budgetUsage - 1) * 100).toStringAsFixed(0)}%，建议控制开支。',
+            severity: InsightSeverity.negative,
+          ),
+        );
+      } else if (budgetUsage > 0.9) {
+        insights.add(
+          AnalyticsInsight(
+            title: '接近预算上限',
+            detail: '已使用预算的 ${(budgetUsage * 100).toStringAsFixed(0)}%，注意控制支出。',
+            severity: InsightSeverity.neutral,
+          ),
+        );
+      } else if (budgetUsage < 0.6) {
+        insights.add(
+          AnalyticsInsight(
+            title: '预算控制出色',
+            detail: '支出仅占预算的 ${(budgetUsage * 100).toStringAsFixed(0)}%，理财习惯良好。',
+            severity: InsightSeverity.positive,
+          ),
+        );
+      }
+    }
+    
+    // 分类预算超支检测（使用本月分类支出）
+    if (categoryBudgets != null && categoryBudgets.isNotEmpty) {
+      for (final entry in monthlyCategories.entries) {
+        final budget = categoryBudgets[entry.key];
+        if (budget != null) {
+          final usage = entry.value / budget;
+          if (usage > 1.0) {
+            insights.add(
+              AnalyticsInsight(
+                title: '「${entry.key}」超支',
+                detail: '该类别本月支出超预算 ${((usage - 1) * 100).toStringAsFixed(0)}%。',
+                severity: InsightSeverity.negative,
+              ),
+            );
+          }
+        }
+      }
     }
 
     return overview;

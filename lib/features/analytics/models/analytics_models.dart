@@ -294,10 +294,17 @@ class SpendingCategoryBreakdown {
   const SpendingCategoryBreakdown({
     required this.category,
     required this.amount,
+    required this.previousAmount,
   });
 
   final String category;
   final double amount;
+  final double previousAmount;
+  
+  double get change {
+    if (previousAmount == 0) return amount == 0 ? 0 : 1;
+    return (amount - previousAmount) / previousAmount;
+  }
 }
 
 @immutable
@@ -327,6 +334,12 @@ class SpendingAnalyticsOverview {
     required this.largestExpense,
     required this.weeklyExpense,
     required this.previousWeeklyExpense,
+    required this.monthlyExpense,
+    required this.monthlyCategories,
+    required this.lastMonthIncome,
+    required this.lastMonthExpense,
+    this.totalBudget,
+    this.categoryBudgets,
   });
 
   final DateTime generatedAt;
@@ -340,15 +353,27 @@ class SpendingAnalyticsOverview {
   final ({double amount, String category, DateTime date})? largestExpense;
   final double weeklyExpense;
   final double previousWeeklyExpense;
+  final double monthlyExpense; // 本月支出（用于预算对比）
+  final Map<String, double> monthlyCategories; // 本月各类别支出（用于预算对比）
+  final double? totalBudget;
+  final Map<String, double>? categoryBudgets;
+  final double lastMonthIncome; // 上月收入（用于稳定的储蓄率计算）
+  final double lastMonthExpense; // 上月支出（用于稳定的储蓄率计算）
 
   double get momChange {
     if (previousExpense == 0) return totalExpense == 0 ? 0 : 1;
     return (totalExpense - previousExpense) / previousExpense;
   }
   
+  // 使用上月数据计算储蓄率，避免每日波动
   double get savingsRate {
-    if (totalIncome == 0) return 0;
-    return (totalIncome - totalExpense) / totalIncome;
+    if (lastMonthIncome == 0) return 0;
+    return (lastMonthIncome - lastMonthExpense) / lastMonthIncome;
+  }
+  
+  // 上月结余（用于显示稳定的数值）
+  double get lastMonthBalance {
+    return lastMonthIncome - lastMonthExpense;
   }
   
   double get weeklyChange {

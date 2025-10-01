@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../design/design_system.dart';
 import '../../../providers/app_settings_provider.dart';
 import '../../../providers/app_info_provider.dart';
+import '../../budget/views/budget_management_view.dart';
 import '../widgets/backend_config_section.dart';
 
 class SettingsTabView extends ConsumerWidget {
@@ -46,150 +47,37 @@ class SettingsTabView extends ConsumerWidget {
   ) {
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (context) => Container(
-        height: 280,
-        decoration: BoxDecoration(
-          color: CupertinoDynamicColor.resolve(QHColors.cardBackground, context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
-                    ),
-                    const Text(
-                      '主题模式',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text(
-                        '完成',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                height: 0.5,
-                color: CupertinoDynamicColor.resolve(
-                  CupertinoColors.separator,
-                  context,
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 20),
-                      CupertinoSlidingSegmentedControl<AppThemeMode>(
-                        groupValue: settings.themeMode,
-                        backgroundColor: CupertinoDynamicColor.resolve(
-                          QHColors.groupedBackground,
-                          context,
-                        ),
-                        thumbColor: CupertinoDynamicColor.resolve(
-                          QHColors.cardBackground,
-                          context,
-                        ),
-                        children: {
-                          AppThemeMode.system: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                            child: Text(
-                              '跟随系统',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: settings.themeMode == AppThemeMode.system
-                                    ? CupertinoDynamicColor.resolve(
-                                        CupertinoColors.label,
-                                        context,
-                                      )
-                                    : CupertinoDynamicColor.resolve(
-                                        CupertinoColors.secondaryLabel,
-                                        context,
-                                      ),
-                              ),
-                            ),
-                          ),
-                          AppThemeMode.light: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                            child: Text(
-                              '浅色模式',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: settings.themeMode == AppThemeMode.light
-                                    ? CupertinoDynamicColor.resolve(
-                                        CupertinoColors.label,
-                                        context,
-                                      )
-                                    : CupertinoDynamicColor.resolve(
-                                        CupertinoColors.secondaryLabel,
-                                        context,
-                                      ),
-                              ),
-                            ),
-                          ),
-                          AppThemeMode.dark: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                            child: Text(
-                              '深色模式',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: settings.themeMode == AppThemeMode.dark
-                                    ? CupertinoDynamicColor.resolve(
-                                        CupertinoColors.label,
-                                        context,
-                                      )
-                                    : CupertinoDynamicColor.resolve(
-                                        CupertinoColors.secondaryLabel,
-                                        context,
-                                      ),
-                              ),
-                            ),
-                          ),
-                        },
-                        onValueChanged: (mode) {
-                          if (mode != null) {
-                            settingsNotifier.setThemeMode(mode);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        '选择应用的外观主题。跟随系统会根据设备的暗黑模式设置自动切换。',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: CupertinoDynamicColor.resolve(
-                            CupertinoColors.secondaryLabel,
-                            context,
-                          ),
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('选择主题模式'),
+        actions: [
+          CupertinoActionSheetAction(
+            isDefaultAction: settings.themeMode == AppThemeMode.system,
+            onPressed: () {
+              settingsNotifier.setThemeMode(AppThemeMode.system);
+              Navigator.of(context).pop();
+            },
+            child: const Text('跟随系统'),
           ),
+          CupertinoActionSheetAction(
+            isDefaultAction: settings.themeMode == AppThemeMode.light,
+            onPressed: () {
+              settingsNotifier.setThemeMode(AppThemeMode.light);
+              Navigator.of(context).pop();
+            },
+            child: const Text('浅色模式'),
+          ),
+          CupertinoActionSheetAction(
+            isDefaultAction: settings.themeMode == AppThemeMode.dark,
+            onPressed: () {
+              settingsNotifier.setThemeMode(AppThemeMode.dark);
+              Navigator.of(context).pop();
+            },
+            child: const Text('深色模式'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
         ),
       ),
     );
@@ -214,6 +102,22 @@ class SettingsTabView extends ConsumerWidget {
               children: [
                 const SizedBox(height: 20),
                 const BackendConfigSection(),
+                const SizedBox(height: 24),
+                _SettingsSection(
+                  title: '财务管理',
+                  children: [
+                    _SettingsListTile(
+                      title: '预算管理',
+                      trailing: '总预算和分类预算',
+                      showArrow: true,
+                      onTap: () => Navigator.of(context).push(
+                        CupertinoPageRoute<void>(
+                          builder: (context) => const BudgetManagementView(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 _SettingsSection(
                   title: '外观',

@@ -149,11 +149,10 @@ class _SummarySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('近 30 天财务概览', style: QHTypography.footnote.copyWith(color: label)),
+        Text('近 30 天支出', style: QHTypography.footnote.copyWith(color: label)),
         const SizedBox(height: 8),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
               _formatCurrency(overview.totalExpense),
@@ -162,15 +161,20 @@ class _SummarySection extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              '支出',
-              style: QHTypography.body.copyWith(color: label),
+            const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '上月 ${_formatCurrency(overview.lastMonthExpense)}',
+                style: QHTypography.footnote.copyWith(color: label),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 16),
-        // 收入和储蓄率
+        // 上月收入和储蓄率
+        Text('上月财务', style: QHTypography.footnote.copyWith(color: label)),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -183,7 +187,7 @@ class _SummarySection extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _formatCurrency(overview.totalIncome),
+                    _formatCurrency(overview.lastMonthIncome),
                     style: QHTypography.title3.copyWith(
                       color: CupertinoColors.systemGreen,
                       fontWeight: FontWeight.w600,
@@ -202,7 +206,7 @@ class _SummarySection extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    overview.totalIncome == 0 ? '--' : '${(savingsRate * 100).toStringAsFixed(1)}%',
+                    overview.lastMonthIncome == 0 ? '--' : '${(savingsRate * 100).toStringAsFixed(1)}%',
                     style: QHTypography.title3.copyWith(
                       color: savingsColor,
                       fontWeight: FontWeight.w600,
@@ -213,7 +217,7 @@ class _SummarySection extends StatelessWidget {
             ),
           ],
         ),
-        if (overview.totalIncome > 0) ...[
+        if (overview.lastMonthIncome > 0) ...[
           const SizedBox(height: 12),
           // 储蓄率进度条
           LayoutBuilder(
@@ -251,8 +255,88 @@ class _SummarySection extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '结余 ${_formatCurrency(overview.totalIncome - overview.totalExpense)}',
+                    '结余 ${_formatCurrency(overview.lastMonthBalance)}',
                     style: QHTypography.footnote.copyWith(color: label),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+        // 总预算进度
+        if (overview.totalBudget != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            height: 1,
+            color: CupertinoDynamicColor.resolve(CupertinoColors.separator, context),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '月度预算',
+            style: QHTypography.footnote.copyWith(color: label),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _formatCurrency(overview.monthlyExpense),
+                style: QHTypography.title3.copyWith(
+                  color: valueColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '/ ${_formatCurrency(overview.totalBudget!)}',
+                style: QHTypography.title3.copyWith(
+                  color: label,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final budgetUsage = (overview.monthlyExpense / overview.totalBudget!).clamp(0.0, 1.0);
+              final progressWidth = constraints.maxWidth * budgetUsage;
+              final isOverBudget = overview.monthlyExpense > overview.totalBudget!;
+              final budgetColor = isOverBudget 
+                  ? CupertinoColors.systemRed
+                  : budgetUsage > 0.9
+                      ? CupertinoColors.systemOrange
+                      : CupertinoColors.systemBlue;
+              
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: SizedBox(
+                      height: 8,
+                      child: Stack(
+                        children: [
+                          Container(color: label.withValues(alpha: 0.2)),
+                          Positioned.fill(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                width: progressWidth,
+                                color: budgetColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isOverBudget
+                        ? '超支 ${_formatCurrency(overview.monthlyExpense - overview.totalBudget!)}'
+                        : '剩余 ${_formatCurrency(overview.totalBudget! - overview.monthlyExpense)}',
+                    style: QHTypography.footnote.copyWith(
+                      color: isOverBudget ? CupertinoColors.systemRed : label,
+                    ),
                   ),
                 ],
               );
@@ -433,12 +517,18 @@ class _CategoryBreakdown extends StatelessWidget {
               : (item.amount / overview.totalExpense)
                     .clamp(0.0, 1.0)
                     .toDouble();
+          final categoryBudget = overview.categoryBudgets?[item.category];
+          // 使用本月该类别的支出（用于预算对比）
+          final monthlyAmount = overview.monthlyCategories[item.category] ?? 0.0;
           return Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: _CategoryRow(
               label: item.category,
               amount: item.amount,
               share: share,
+              change: item.change,
+              budget: categoryBudget,
+              monthlyAmount: monthlyAmount,
             ),
           );
         }),
@@ -452,11 +542,17 @@ class _CategoryRow extends StatelessWidget {
     required this.label,
     required this.amount,
     required this.share,
+    this.change,
+    this.budget,
+    this.monthlyAmount,
   });
 
   final String label;
   final double amount;
   final double share;
+  final double? change;
+  final double? budget;
+  final double? monthlyAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +583,18 @@ class _CategoryRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
+            if (change != null && change != 0) ...[
+              Text(
+                _formatSignedPercent(change),
+                style: QHTypography.footnote.copyWith(
+                  color: change! > 0
+                      ? CupertinoColors.systemRed
+                      : CupertinoColors.systemGreen,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             Text(
               _formatCurrency(amount),
               style: QHTypography.subheadline.copyWith(color: valueColor),
@@ -518,9 +626,25 @@ class _CategoryRow extends StatelessWidget {
           },
         ),
         const SizedBox(height: 6),
-        Text(
-          '占比 ${(share * 100).toStringAsFixed(1)}%',
-          style: QHTypography.footnote.copyWith(color: subtle),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '占比 ${(share * 100).toStringAsFixed(1)}%',
+              style: QHTypography.footnote.copyWith(color: subtle),
+            ),
+            if (budget != null && monthlyAmount != null) ...[
+              Text(
+                '本月 ${_formatCurrency(monthlyAmount!)} / ${_formatCurrency(budget!)}',
+                style: QHTypography.footnote.copyWith(
+                  color: monthlyAmount! > budget! 
+                      ? CupertinoColors.systemRed 
+                      : subtle,
+                  fontWeight: monthlyAmount! > budget! ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );

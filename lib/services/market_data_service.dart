@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:crypto/crypto.dart';
+import '../core/chinese_holidays.dart';
 
 /// 历史行情数据模型
 class HistoricalData {
@@ -519,7 +520,8 @@ class MarketDataService {
   static DateTime _determineHistoricalEndDate(DateTime now) {
     var cursor = _normalizeDate(now);
     // 始终回退到最近一个已经收盘的交易日
-    if (_isTradingDay(cursor)) {
+    // 使用ChineseHolidays判断（包含周末和节假日）
+    if (ChineseHolidays.isTradingDay(cursor)) {
       cursor = _previousTradingDay(cursor);
     } else {
       cursor = _previousTradingDay(cursor);
@@ -527,13 +529,11 @@ class MarketDataService {
     return cursor;
   }
 
-  static bool _isTradingDay(DateTime date) => date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;
-
   static DateTime _previousTradingDay(DateTime date) {
     var cursor = _normalizeDate(date);
     do {
       cursor = cursor.subtract(const Duration(days: 1));
-    } while (!_isTradingDay(cursor));
+    } while (!ChineseHolidays.isTradingDay(cursor));
     return cursor;
   }
 
@@ -541,7 +541,7 @@ class MarketDataService {
     var cursor = _normalizeDate(date);
     do {
       cursor = cursor.add(const Duration(days: 1));
-    } while (!_isTradingDay(cursor));
+    } while (!ChineseHolidays.isTradingDay(cursor));
     return cursor;
   }
 
