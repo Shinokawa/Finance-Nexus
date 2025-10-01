@@ -193,11 +193,11 @@ class _CategoryBreakdown extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '展示近 30 天支出占比最高的前 ${overview.topCategories.length} 个类别。',
+          '展示近 30 天支出占比最高的前 ${math.min(5, overview.topCategories.length)} 个类别。',
           style: QHTypography.footnote.copyWith(color: label),
         ),
         const SizedBox(height: 16),
-        ...overview.topCategories.map((item) {
+        ...overview.topCategories.take(5).map((item) {
           final share = overview.totalExpense <= 0
               ? 0.0
               : (item.amount / overview.totalExpense)
@@ -458,7 +458,7 @@ class _CategoryPieChart extends StatelessWidget {
       CupertinoColors.systemGrey,
     ];
 
-    // 准备饼图数据，只取前8个类别，其余归为"其他"
+    // 准备饼图数据，显示前5个类别，其余归为"其他"
     final pieData = <PieChartData>[];
     final categories = overview.topCategories;
     
@@ -471,13 +471,13 @@ class _CategoryPieChart extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // 取前7个类别
-    final topCategories = categories.take(7).toList();
+    // 取前5个类别
+    final topCategories = categories.take(5).toList();
     double otherTotal = 0;
     
     // 计算其他类别的总和
-    if (categories.length > 7) {
-      otherTotal = categories.skip(7).fold<double>(0, (sum, cat) => sum + cat.amount);
+    if (categories.length > 5) {
+      otherTotal = categories.skip(5).fold<double>(0, (sum, cat) => sum + cat.amount);
     }
 
     // 添加主要类别到饼图数据

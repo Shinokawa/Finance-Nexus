@@ -255,7 +255,6 @@ class PortfolioAnalyticsService {
     final topCategories = categories.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final breakdown = topCategories
-        .take(5)
         .map(
           (entry) => SpendingCategoryBreakdown(
             category: entry.key,
