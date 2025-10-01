@@ -2,8 +2,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'app_database_file_resolver.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/enums.dart';
@@ -81,8 +80,7 @@ class Transactions extends Table {
 
   RealColumn get amount => real()();
 
-  DateTimeColumn get date =>
-      dateTime().clientDefault(() => DateTime.now())();
+  DateTimeColumn get date => dateTime().clientDefault(() => DateTime.now())();
 
   TextColumn get type =>
       text().map(const EnumNameTypeConverter(TransactionType.values))();
@@ -92,12 +90,10 @@ class Transactions extends Table {
   TextColumn get notes => text().nullable()();
 
   @ReferenceName('outgoingTransactions')
-  TextColumn get fromAccountId =>
-    text().nullable().references(Accounts, #id)();
+  TextColumn get fromAccountId => text().nullable().references(Accounts, #id)();
 
   @ReferenceName('incomingTransactions')
-  TextColumn get toAccountId =>
-    text().nullable().references(Accounts, #id)();
+  TextColumn get toAccountId => text().nullable().references(Accounts, #id)();
 
   TextColumn get relatedHoldingId =>
       text().nullable().references(Holdings, #id)();
@@ -105,8 +101,7 @@ class Transactions extends Table {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final dbDirectory = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbDirectory.path, 'quant_hub.sqlite'));
+    final file = await resolveApplicationDatabaseFile();
     return NativeDatabase.createInBackground(file);
   });
 }
@@ -124,33 +119,36 @@ class AppDatabase extends _$AppDatabase {
     return AppDatabase._internal(NativeDatabase.memory());
   }
 
+  factory AppDatabase.forFile(File file) {
+    return AppDatabase._internal(NativeDatabase.createInBackground(file));
+  }
+
   @override
   int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-        },
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.addColumn(holdings, holdings.purchaseDate);
-          }
-          if (from < 3) {
-            await m.database.customStatement(
-              'ALTER TABLE accounts ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0.0003',
-            );
-            await m.database.customStatement(
-              'ALTER TABLE accounts ADD COLUMN stamp_tax_rate REAL NOT NULL DEFAULT 0.001',
-            );
-          }
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(holdings, holdings.purchaseDate);
+      }
+      if (from < 3) {
+        await m.database.customStatement(
+          'ALTER TABLE accounts ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0.0003',
+        );
+        await m.database.customStatement(
+          'ALTER TABLE accounts ADD COLUMN stamp_tax_rate REAL NOT NULL DEFAULT 0.001',
+        );
+      }
+    },
+  );
 }
 
 @DriftAccessor(tables: [Accounts])
-class AccountDao extends DatabaseAccessor<AppDatabase>
-    with _$AccountDaoMixin {
+class AccountDao extends DatabaseAccessor<AppDatabase> with _$AccountDaoMixin {
   AccountDao(super.db);
 
   Future<List<Account>> getAllAccounts() => select(accounts).get();
@@ -158,13 +156,16 @@ class AccountDao extends DatabaseAccessor<AppDatabase>
   Stream<List<Account>> watchAllAccounts() => select(accounts).watch();
 
   Future<Account?> getAccountById(String id) {
-    return (select(accounts)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+    return (select(
+      accounts,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
   }
 
   Future<int> insertAccount(AccountsCompanion account) =>
       into(accounts).insert(account, mode: InsertMode.insertOrReplace);
 
-  Future<bool> updateAccount(Account account) => update(accounts).replace(account);
+  Future<bool> updateAccount(Account account) =>
+      update(accounts).replace(account);
 
   Future<int> deleteAccountById(String id) {
     return (delete(accounts)..where((tbl) => tbl.id.equals(id))).go();
@@ -183,7 +184,9 @@ class PortfolioDao extends DatabaseAccessor<AppDatabase>
   Stream<List<Portfolio>> watchAllPortfolios() => select(portfolios).watch();
 
   Future<Portfolio?> getPortfolioById(String id) {
-    return (select(portfolios)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+    return (select(
+      portfolios,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
   }
 
   Future<int> insertPortfolio(PortfoliosCompanion portfolio) =>
@@ -200,8 +203,7 @@ class PortfolioDao extends DatabaseAccessor<AppDatabase>
 }
 
 @DriftAccessor(tables: [Holdings])
-class HoldingDao extends DatabaseAccessor<AppDatabase>
-    with _$HoldingDaoMixin {
+class HoldingDao extends DatabaseAccessor<AppDatabase> with _$HoldingDaoMixin {
   HoldingDao(super.db);
 
   Future<List<Holding>> getAllHoldings() => select(holdings).get();
@@ -209,27 +211,33 @@ class HoldingDao extends DatabaseAccessor<AppDatabase>
   Stream<List<Holding>> watchAllHoldings() => select(holdings).watch();
 
   Future<List<Holding>> getHoldingsByPortfolio(String portfolioId) {
-    return (select(holdings)..where((tbl) => tbl.portfolioId.equals(portfolioId)))
-        .get();
+    return (select(
+      holdings,
+    )..where((tbl) => tbl.portfolioId.equals(portfolioId))).get();
   }
 
   Future<List<Holding>> getHoldingsByAccount(String accountId) {
-    return (select(holdings)..where((tbl) => tbl.accountId.equals(accountId)))
-        .get();
+    return (select(
+      holdings,
+    )..where((tbl) => tbl.accountId.equals(accountId))).get();
   }
 
   Future<Holding?> getHoldingById(String id) {
-    return (select(holdings)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+    return (select(
+      holdings,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
   }
 
   Stream<List<Holding>> watchHoldingsByPortfolio(String portfolioId) {
-    return (select(holdings)..where((tbl) => tbl.portfolioId.equals(portfolioId)))
-        .watch();
+    return (select(
+      holdings,
+    )..where((tbl) => tbl.portfolioId.equals(portfolioId))).watch();
   }
 
   Stream<List<Holding>> watchHoldingsByAccount(String accountId) {
-    return (select(holdings)..where((tbl) => tbl.accountId.equals(accountId)))
-        .watch();
+    return (select(
+      holdings,
+    )..where((tbl) => tbl.accountId.equals(accountId))).watch();
   }
 
   Future<int> insertHolding(HoldingsCompanion holding) =>
@@ -255,26 +263,37 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   Stream<List<Transaction>> watchTransactions() => select(transactions).watch();
 
   Future<List<Transaction>> getTransactionsByAccount(String accountId) {
-    return (select(transactions)
-          ..where((tbl) => tbl.fromAccountId.equals(accountId) | tbl.toAccountId.equals(accountId)))
+    return (select(transactions)..where(
+          (tbl) =>
+              tbl.fromAccountId.equals(accountId) |
+              tbl.toAccountId.equals(accountId),
+        ))
         .get();
   }
 
   Stream<List<Transaction>> watchTransactionsByAccount(String accountId) {
     final query = select(transactions)
-      ..where((tbl) => tbl.fromAccountId.equals(accountId) | tbl.toAccountId.equals(accountId))
-      ..orderBy([(tbl) => OrderingTerm(expression: tbl.date, mode: OrderingMode.desc)]);
+      ..where(
+        (tbl) =>
+            tbl.fromAccountId.equals(accountId) |
+            tbl.toAccountId.equals(accountId),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.date, mode: OrderingMode.desc),
+      ]);
     return query.watch();
   }
 
   Future<List<Transaction>> getTransactionsByHolding(String holdingId) {
-    return (select(transactions)
-          ..where((tbl) => tbl.relatedHoldingId.equals(holdingId)))
-        .get();
+    return (select(
+      transactions,
+    )..where((tbl) => tbl.relatedHoldingId.equals(holdingId))).get();
   }
 
   Future<Transaction?> getTransactionById(String id) {
-    return (select(transactions)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+    return (select(
+      transactions,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
   }
 
   Future<int> insertTransaction(TransactionsCompanion transaction) =>
