@@ -218,13 +218,8 @@ class PortfolioAnalyticsService {
     DateTime normalizeMonth(DateTime date) =>
         DateTime(date.year, date.month);
 
-    // 将当前时间标准化为今天的00:00:00
-    final today = normalize(now);
-    
-    // 30天窗口：从30天前的00:00:00到今天23:59:59
-    // 例如：10月2日 → 9月3日00:00:00 到 10月2日23:59:59（共30天）
     final window = const Duration(days: 30);
-    final cutoff = today.subtract(window); // 标准化后的cutoff，确保是00:00:00
+    final cutoff = now.subtract(window);
     final previousCutoff = cutoff.subtract(window);
     
     // 本周和上周的计算
@@ -369,10 +364,14 @@ class PortfolioAnalyticsService {
       return null;
     }
 
-    final orderedTrendKeys = trend.keys.toList()..sort();
-    final dailyTrend = orderedTrendKeys
-        .map((date) => TimeSeriesPoint(date: date, value: trend[date]!))
-        .toList();
+    // 生成完整的30天数据点，从今天往前数30天
+    // 即使某天没有支出也要显示0
+    final dailyTrend = <TimeSeriesPoint>[];
+    for (var i = 29; i >= 0; i--) {
+      final date = normalize(now.subtract(Duration(days: i)));
+      final value = trend[date] ?? 0.0;
+      dailyTrend.add(TimeSeriesPoint(date: date, value: value));
+    }
 
     final topCategories = categories.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
