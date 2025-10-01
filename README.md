@@ -19,6 +19,22 @@
 
 市面上的记账偏日常消费；券商 App 又只看到单账户。自己想要一个更贴近"资产全貌 + 自己的分类方式"的视图，同时数据留在本地，不上传。
 
+## 下载安装
+
+### iOS 用户
+
+- **TestFlight**: [立即加入测试](https://testflight.apple.com/join/6EnSGcum) 🚀
+- **侧载**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
+- **App Store**: 计划上架
+
+### macOS 用户
+
+- 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载 .dmg 文件
+
+### 开发者
+
+如果你想从源码构建，请参见下方的"从源码构建"部分。
+
 ## 主要功能
 
 ### 仪表板
@@ -72,22 +88,6 @@
 <p style="text-align: center; margin-top: 8px;">仪表盘 · 持仓情况 · 账户 · 分析 · 协方差矩阵</p>
 
 ## 快速开始
-
-### 下载安装
-
-#### iOS 用户
-
-- **TestFlight**: [立即加入测试](https://testflight.apple.com/join/6EnSGcum) 🚀
-- **侧载**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
-- **App Store**: 计划上架
-
-#### macOS 用户
-
-- 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载 .dmg 文件
-
-#### 开发者
-
-如果你想从源码构建：
 
 ### 从源码构建
 
