@@ -23,9 +23,7 @@
 
 ### iOS 用户
 
-- **TestFlight**: [立即加入测试](https://testflight.apple.com/join/6EnSGcum) 🚀
-- **侧载**: 从 [Releases](https://github.com/Shinokawa/Finance-Nexus/releases) 页面下载最新的 .ipa 文件
-- **App Store**: 计划上架
+- **App Store**: [点击下载](https://apps.apple.com/cn/app/finanexus/id6753062154?l=en-GB)
 
 ### macOS 用户
 
